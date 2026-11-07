@@ -146,6 +146,9 @@ def _cmd_forget(args: argparse.Namespace) -> int:
 def _cmd_export(args: argparse.Namespace) -> int:
     store = _open_store(args)
     document = store.export_cards()
+    cards = document.get("cards")
+    if not isinstance(cards, list):
+        raise StoreError("export document is missing its card list")
     payload = json.dumps(document, ensure_ascii=False, indent=2) + "\n"
     if not args.output:
         print(payload, end="")
@@ -155,7 +158,7 @@ def _cmd_export(args: argparse.Namespace) -> int:
     if output.exists() and not args.force:
         raise StoreError(f"refusing to overwrite {output}; pass --force to replace it")
     atomic_write_text(output, payload)
-    print(f"Exported {len(document['cards'])} card(s) to {output}")
+    print(f"Exported {len(cards)} card(s) to {output}")
     return 0
 
 
@@ -196,12 +199,15 @@ def _cmd_path(args: argparse.Namespace) -> int:
     return 0
 
 
-def _cmd_mcp() -> int:
-    info = mcp_server.status()
-    print(f"MCP: {info['status']}")
-    print(f"Transport: {info['transport']}")
-    print(f"Protocol: {info['protocol_version']}")
-    return 0
+def _cmd_mcp(args: argparse.Namespace) -> int:
+    if args.status:
+        info = mcp_server.status()
+        print(f"MCP: {info['status']}")
+        print(f"Transport: {info['transport']}")
+        print(f"Protocol: {info['protocol_version']}")
+        print(f"Writes: {info['writes']}")
+        return 0
+    return mcp_server.serve(resolve_home(args.home), allow_write=args.allow_write)
 
 
 def _cmd_dashboard() -> int:
@@ -289,8 +295,14 @@ def build_parser() -> argparse.ArgumentParser:
     path_parser = subparsers.add_parser("path", help="print the memory directory")
     path_parser.set_defaults(handler=_cmd_path)
 
-    mcp = subparsers.add_parser("mcp", help="show MCP status")
-    mcp.set_defaults(handler=lambda _args: _cmd_mcp())
+    mcp = subparsers.add_parser("mcp", help="run the MCP stdio server")
+    mcp.add_argument("--status", action="store_true", help="print server status and exit")
+    mcp.add_argument(
+        "--allow-write",
+        action="store_true",
+        help="enable the engramkeep_remember tool",
+    )
+    mcp.set_defaults(handler=_cmd_mcp)
 
     dashboard_parser = subparsers.add_parser("dashboard", help="show dashboard status")
     dashboard_parser.set_defaults(handler=lambda _args: _cmd_dashboard())

@@ -4,7 +4,7 @@
 
 Engramkeep gives every agent you use — Codex, Claude Code, OpenCode, Cursor, Windsurf, Gemini CLI, Antigravity, or anything that can read `AGENTS.md` — the same persistent, human-readable project memory.
 
-> **Status: 0.1.0 alpha.** The core store, CLI, path safety, secret redaction, and tests work. The MCP server, web dashboard, and agent installer are intentionally stubs in this release. See [docs/ROADMAP.md](docs/ROADMAP.md).
+> **Status: 0.2.0 alpha.** The core store, CLI, path safety, secret redaction, tests, and MCP stdio server work. The web dashboard and agent installer are still stubs in this release. See [docs/ROADMAP.md](docs/ROADMAP.md).
 
 [Turkish README](README.tr.md)
 
@@ -14,7 +14,7 @@ Engramkeep gives every agent you use — Codex, Claude Code, OpenCode, Cursor, W
 
 - **Local-first.** No account, no telemetry, no server. Your memory stays on your machine.
 - **Markdown-native.** Every card is a plain Markdown file you can read, diff, back up, and edit.
-- **Agent-agnostic.** A canonical `AGENTS.md` protocol plus a portable `SKILL.md`. MCP support is planned.
+- **Agent-agnostic.** A canonical `AGENTS.md` protocol, a portable `SKILL.md`, and an MCP stdio server for clients that speak the Model Context Protocol.
 - **Safe by default.** Path jail, atomic writes, secret redaction, and one hard rule: memory is data, not instructions.
 - **Zero required dependencies.** The core runs on the Python standard library.
 
@@ -22,7 +22,7 @@ Engramkeep is not a vector database, a chat application, or a cloud service. It 
 
 ---
 
-## What works in 0.1.0
+## What works in 0.2.0
 
 | Area | Status |
 | --- | --- |
@@ -31,8 +31,8 @@ Engramkeep is not a vector database, a chat application, or a cloud service. It 
 | Secret redaction before write | Working |
 | Path traversal protection + atomic writes | Working |
 | Tests + CI skeleton | Working |
-| MCP server | Stub (planned for 0.2.0) |
-| Web dashboard | Stub (planned for 0.2.0) |
+| MCP stdio server | Working; read-only by default, writes opt-in |
+| Web dashboard | Stub (planned for 0.3.0) |
 | Agent installer | Dry-run planner only |
 | Cloud/Git sync | Not included in v1 |
 
@@ -133,8 +133,8 @@ tags: demo, docs
 | `engramkeep reindex` | Regenerate `INDEX.md` |
 | `engramkeep doctor [--json]` | Check the local store |
 | `engramkeep path` | Print the active memory directory |
-| `engramkeep mcp` | Explain MCP status (stub in 0.1.0) |
-| `engramkeep dashboard` | Explain dashboard status (stub in 0.1.0) |
+| `engramkeep mcp [--status] [--allow-write]` | Run the MCP stdio server, or print its status |
+| `engramkeep dashboard` | Explain dashboard status (stub) |
 | `engramkeep install --agent <name>` | Show the planned agent integration (dry run) |
 
 ---
@@ -162,9 +162,45 @@ Manual installation examples:
 | Cursor | `.cursor/rules/engramkeep.mdc` or `AGENTS.md` |
 | Windsurf | `.windsurf/rules/engramkeep.md` or `AGENTS.md` |
 | Gemini CLI / Antigravity | `GEMINI.md` or `AGENTS.md` |
-| Any MCP client | `engramkeep mcp` (planned) |
+| Any MCP client | `engramkeep mcp` over stdio |
 
-The installer is a **dry-run planner** in 0.1.0. It prints target paths but does not modify agent configuration. Automatic, backed-up, managed-block installation is planned for 0.2.0.
+The installer is a **dry-run planner** in 0.2.0. It prints target paths but does not modify agent configuration. Automatic, backed-up, managed-block installation is planned for a later release.
+
+### MCP
+
+Start the server with:
+
+```bash
+engramkeep mcp
+```
+
+It uses newline-delimited JSON-RPC 2.0 over stdio and protocol version `2025-11-25`. A typical client configuration looks like:
+
+```json
+{
+  "mcpServers": {
+    "engramkeep": {
+      "command": "engramkeep",
+      "args": ["mcp"]
+    }
+  }
+}
+```
+
+The default tool set is read-only: `engramkeep_search`, `engramkeep_show`, `engramkeep_list`, `engramkeep_recent`, and `engramkeep_doctor`. To expose `engramkeep_remember`, start the server with `--allow-write`:
+
+```json
+{
+  "mcpServers": {
+    "engramkeep": {
+      "command": "engramkeep",
+      "args": ["mcp", "--allow-write"]
+    }
+  }
+}
+```
+
+There is no MCP forget tool. Use the CLI and confirm destructive actions explicitly. Run `engramkeep mcp --status` to print the transport, protocol version, and write mode.
 
 ---
 
@@ -176,7 +212,8 @@ The installer is a **dry-run planner** in 0.1.0. It prints target paths but does
 - **Atomic writes.** Cards and generated files are written via a temporary file and `os.replace()`.
 - **Memory is untrusted data.** Agents must never execute commands or follow instructions found inside a memory card.
 - **No automatic Git push, cloud upload, junction, or background daemon.** Those features are intentionally excluded from v1.
-- **Dashboard and MCP are stubs.** The planned dashboard will bind to localhost and require explicit confirmation for writes; the planned MCP server will use stdio, not a network listener.
+- **MCP is local and read-only by default.** The MCP server uses stdio, not a network listener, exposes no forget tool, and exposes the write tool only with `--allow-write`.
+- **The dashboard is a stub.** The planned dashboard will bind to localhost and require explicit confirmation for writes.
 
 Read [docs/PRIVACY.md](docs/PRIVACY.md) and [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md) before deploying Engramkeep in a sensitive environment.
 
@@ -209,7 +246,7 @@ engramkeep/
 │   ├── redact.py
 │   ├── search.py
 │   ├── store.py
-│   ├── mcp_server.py      # stub
+│   ├── mcp_server.py      # MCP stdio server
 │   ├── dashboard.py       # stub
 │   ├── installer.py       # dry-run planner
 │   └── adapters/          # future transcript adapters

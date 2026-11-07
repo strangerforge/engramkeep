@@ -1,7 +1,7 @@
 # Threat model
 
 This document describes the security assumptions and known limitations of
-Engramkeep 0.1.0. It is intentionally conservative.
+Engramkeep 0.2.0. It is intentionally conservative.
 
 ## Assets
 
@@ -19,12 +19,13 @@ Engramkeep 0.1.0. It is intentionally conservative.
 3. **Local process -> filesystem.** The process runs with the user's
    privileges. A local attacker or malware with the same privileges is outside
    the model.
-4. **Future dashboard/MCP -> store.** These components do not exist in 0.1.0.
-   Their planned security requirements are listed below.
+4. **MCP client -> store.** The MCP stdio server exists in 0.2.0 and is
+   read-only by default. The dashboard does not exist yet; its planned
+   security requirements are listed below.
 
 ## Threats and mitigations
 
-| Threat | Mitigation in 0.1.0 | Residual risk |
+| Threat | Mitigation in 0.2.0 | Residual risk |
 | --- | --- | --- |
 | Path traversal through a project name | `normalize_project_id()` rejects separators, drive letters, control characters, and traversal; `safe_join()` proves containment | A bug in a future caller could bypass the helper |
 | Symlink escape | `safe_join()` resolves symlinks; card scanning rejects symlinks; `append_text()` rejects symlinks | Junction behavior on some Windows versions is not exhaustively tested |
@@ -38,7 +39,12 @@ Engramkeep 0.1.0. It is intentionally conservative.
 | Denial of service via huge input | Decision text is capped at 4000 characters; path components are bounded | Very large hand-written files are not size-limited |
 | Malformed card crashes a command | Parse errors are reported; `doctor` surfaces them | A malformed card is skipped by search/list |
 | Audit log tampering | Append-only by convention; no cryptographic sealing | A local user can edit the file |
-| Store schema confusion | `meta.json` schema version is validated; newer/older versions are rejected | No migration exists in 0.1.0 |
+| Store schema confusion | `meta.json` schema version is validated; newer/older versions are rejected | No migration exists in 0.2.0 |
+| MCP write tool misuse | `engramkeep_remember` is not listed or callable unless the server starts with `--allow-write`; there is no MCP forget tool | A user who enables `--allow-write` gives the client permission to add cards |
+| MCP network exposure | stdio transport only; the server never opens a socket | A client can still send arbitrary JSON-RPC |
+| MCP denial of service | Request lines are capped at 1 MiB; queries, tags, and limits are bounded | A client can send many requests |
+| MCP malformed input | Invalid JSON, UTF-8, batches, and arguments produce JSON-RPC errors without crashing the loop | Error text can reveal local paths |
+| MCP prompt injection | Initialization instructions and docs say card content is untrusted; tools return content as data | A client can still choose to follow card text |
 
 ## Out of scope
 
@@ -50,18 +56,24 @@ Engramkeep 0.1.0. It is intentionally conservative.
 - Guaranteed secret detection.
 - Perfect isolation of agent behavior from stored text.
 
-## Requirements for future components
+## Security requirements for integrations
 
-### MCP server (0.2.0)
+### MCP server (implemented in 0.2.0)
 
-- stdio transport only; no TCP listener.
-- newline-delimited JSON, protocol version 2025-11-25.
-- read-only tools by default.
-- writes require an explicit confirmation token or user-approved mode.
-- validate every path through the same store helpers.
-- return card content as data; never mark it as trusted instructions.
+- [x] stdio transport only; no TCP listener.
+- [x] newline-delimited JSON-RPC 2.0, protocol version 2025-11-25.
+- [x] read-only tools by default.
+- [x] writes require the explicit `--allow-write` server flag.
+- [x] validate every path through the same store helpers.
+- [x] return card content as data; initialization instructions call it
+  untrusted.
+- [x] no forget tool.
+- [x] cap request lines and tool arguments.
 
-### Dashboard (0.2.0)
+Residual risk: a client started with `--allow-write` can add cards, and a
+client can ignore the instruction to treat card text as data.
+
+### Dashboard (0.3.0)
 
 - bind to `127.0.0.1` only.
 - require a per-session token and reject missing/invalid tokens.
@@ -71,7 +83,7 @@ Engramkeep 0.1.0. It is intentionally conservative.
 - mutations use POST with CSRF protection and explicit confirmation.
 - no GET request may mutate state.
 
-### Installer (0.2.0)
+### Installer (0.3.0)
 
 - preview changes by default.
 - back up every file before modification.

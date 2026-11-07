@@ -3,7 +3,7 @@
 This roadmap is a direction, not a promise. Security gates apply to every
 release.
 
-## 0.1.0 - Alpha (current)
+## 0.1.0 - Alpha (released)
 
 - Local Markdown store with cards, index, recent activity, and audit log.
 - CLI: `init`, `remember`, `search`, `show`, `list`, `recent`, `forget`,
@@ -13,23 +13,33 @@ release.
 - Portable `AGENTS.md` and `SKILL.md` templates.
 - Dry-run agent installer.
 - Tests, CI skeleton, repository hygiene check.
-- MCP and dashboard are stubs.
+- MCP and dashboard were stubs.
 
-## 0.2.0 - Integrations
+## 0.2.0 - MCP (current)
 
-- MCP stdio server with newline-delimited JSON and protocol version
-  2025-11-25.
-- Read-only MCP tools first; write tools require explicit confirmation.
+- [x] MCP stdio server with newline-delimited JSON-RPC 2.0 and protocol
+  version 2025-11-25.
+- [x] Read-only tools: `engramkeep_search`, `engramkeep_show`,
+  `engramkeep_list`, `engramkeep_recent`, and `engramkeep_doctor`.
+- [x] Opt-in `engramkeep_remember` write tool behind `--allow-write`.
+- [x] MCP protocol and tool tests, including framing, size limits, batch
+  handling, error responses, and write gating.
+
+Security gate: threat model updated, no network listener, no write tool by
+default, no path escape, no command execution from card content.
+
+## 0.3.0 - Dashboard and installer
+
 - Hardened dashboard: loopback bind, per-session token, CSP, path jail,
   text-only rendering, POST-only mutations.
 - Installer that previews, backs up, and updates a managed block.
 - Schema migration framework.
 - More tests for the new surfaces.
 
-Security gate: threat model updated, no network listener by default, no
-unauthenticated writes, no HTML injection, no path escape.
+Security gate: no unauthenticated writes, no HTML injection, no path escape,
+and every installer change is backed up and reversible.
 
-## 0.3.0 - Import and encryption
+## 0.4.0 - Import and encryption
 
 - Read-only transcript adapters with explicit consent and documented paths.
 - Optional encryption at rest with a user-supplied key.
@@ -39,7 +49,7 @@ unauthenticated writes, no HTML injection, no path escape.
 Security gate: imported text is treated as untrusted, encrypted stores never
 write plaintext to disk, and key handling is documented.
 
-## 0.4.0 - Optional sync design
+## 0.5.0 - Optional sync design
 
 - Design-only work for encrypted, user-controlled sync.
 - Allowlist-based Git integration that never runs `git add -A`.

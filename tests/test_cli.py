@@ -115,9 +115,32 @@ def test_install_plan_and_unknown_agent(cli_home: Path, capsys: pytest.CaptureFi
     assert "unknown agent" in capsys.readouterr().err
 
 
-def test_mcp_and_dashboard_status(cli_home: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    assert main(["mcp"]) == 0
-    assert "not implemented" in capsys.readouterr().out
+def test_mcp_status(cli_home: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    assert main(["mcp", "--status"]) == 0
+    output = capsys.readouterr().out
+    assert "MCP: available" in output
+    assert "Transport: stdio" in output
+    assert "Protocol: 2025-11-25" in output
+    assert "--allow-write" in output
+
+
+def test_mcp_command_serves_with_resolved_home(
+    cli_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls: dict[str, object] = {}
+
+    def fake_serve(home: Path, *, allow_write: bool = False) -> int:
+        calls["home"] = home
+        calls["allow_write"] = allow_write
+        return 0
+
+    monkeypatch.setattr("engramkeep.mcp_server.serve", fake_serve)
+    assert main(["mcp", "--allow-write"]) == 0
+    assert calls["home"] == cli_home.resolve()
+    assert calls["allow_write"] is True
+
+
+def test_dashboard_status(cli_home: Path, capsys: pytest.CaptureFixture[str]) -> None:
     assert main(["dashboard"]) == 0
     assert "not implemented" in capsys.readouterr().out
 
@@ -138,4 +161,4 @@ def test_version(capsys: pytest.CaptureFixture[str]) -> None:
     with pytest.raises(SystemExit) as excinfo:
         main(["--version"])
     assert excinfo.value.code == 0
-    assert "0.1.0" in capsys.readouterr().out
+    assert "0.2.0" in capsys.readouterr().out

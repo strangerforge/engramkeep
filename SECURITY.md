@@ -4,7 +4,8 @@
 
 | Version | Supported |
 | --- | --- |
-| 0.1.x | Yes |
+| 0.2.x | Yes |
+| 0.1.x | No |
 | Older | No |
 
 Engramkeep is alpha software. Security fixes are applied to the latest release.
@@ -48,7 +49,7 @@ In scope:
 - secret leakage despite the documented redaction behavior,
 - unsafe file writes or permission issues,
 - command execution or network access introduced by the core,
-- vulnerabilities in future MCP, dashboard, or installer code,
+- vulnerabilities in the MCP server, dashboard, or installer code,
 - supply-chain issues in the build or release process.
 
 Out of scope:

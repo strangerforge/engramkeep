@@ -1,6 +1,6 @@
 """Agent integration planner.
 
-The 0.1.0 installer is intentionally a dry run. It never edits agent
+The 0.2.0 installer is intentionally a dry run. It never edits agent
 configuration, never writes outside the repository, and never creates
 symlinks or junctions.
 """

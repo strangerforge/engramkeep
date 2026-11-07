@@ -1,6 +1,6 @@
 """Web dashboard placeholder.
 
-The 0.2.0 implementation will bind to loopback only, require a per-session
+The 0.3.0 implementation will bind to loopback only, require a per-session
 token, enforce a path jail, use a strict Content-Security-Policy, render card
 content as text rather than HTML, and require an explicit POST plus
 confirmation for mutations.
@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import sys
 
-STATUS = "not implemented in 0.1.0; planned for 0.2.0"
+STATUS = "not implemented in 0.2.0; planned for 0.3.0"
 
 
 def status() -> dict[str, str]:
@@ -26,8 +26,8 @@ def status() -> dict[str, str]:
 def main() -> int:
     """Explain that the dashboard is not available yet."""
     print(
-        "Engramkeep dashboard is not implemented in 0.1.0. "
-        "It is planned for 0.2.0 with localhost-only binding and a token.",
+        "Engramkeep dashboard is not implemented in 0.2.0. "
+        "It is planned for 0.3.0 with localhost-only binding and a token.",
         file=sys.stderr,
     )
     return 2

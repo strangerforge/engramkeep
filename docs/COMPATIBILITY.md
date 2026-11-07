@@ -1,7 +1,7 @@
 # Compatibility
 
 Engramkeep is portable by file format, not by automatic installation. The
-repository ships templates that work with common agents; the 0.1.0 installer
+repository ships templates that work with common agents; the 0.2.0 installer
 only prints a plan.
 
 ## Runtime
@@ -30,7 +30,7 @@ versions above.
 | Windsurf | Markdown rule, `AGENTS.md` | `.windsurf/rules/engramkeep.md` | Copy from `templates/rules/windsurf.md`. |
 | Gemini CLI | `GEMINI.md`, `AGENTS.md` | `~/.gemini/GEMINI.md` or project `AGENTS.md` | Prefer `AGENTS.md` when supported. |
 | Antigravity | `GEMINI.md`, `AGENTS.md` | `~/.gemini/GEMINI.md` or project `AGENTS.md` | Verify your installed version's behavior. |
-| Any MCP client | MCP | Not available in 0.1.0 | Planned for 0.2.0. |
+| Any MCP client | MCP stdio | `engramkeep mcp` | Read-only tools by default; `--allow-write` enables the remember tool. |
 
 These paths are conventions, not guarantees. Agent vendors can change them.
 The dry-run planner in `engramkeep install --agent <name>` prints the current
@@ -45,19 +45,25 @@ assumptions without touching the filesystem.
 
 ## MCP
 
-MCP is not implemented in 0.1.0. The planned implementation will use:
+The MCP stdio server is available in 0.2.0. It uses:
 
 - stdio transport,
-- newline-delimited JSON framing,
+- newline-delimited JSON-RPC 2.0 framing,
 - protocol version 2025-11-25,
 - read-only tools by default.
 
-It will not use the legacy `Content-Length` framing and will not open a TCP
-listener.
+Read-only tools are `engramkeep_search`, `engramkeep_show`,
+`engramkeep_list`, `engramkeep_recent`, and `engramkeep_doctor`. The
+`engramkeep_remember` write tool is exposed only when the server is started
+with `--allow-write`. There is no MCP forget tool.
+
+The server does not use the legacy `Content-Length` framing and does not open a
+TCP listener. Start it with `engramkeep mcp`; print its status with
+`engramkeep mcp --status`.
 
 ## Dashboard
 
-The web dashboard is not implemented in 0.1.0. The planned implementation will
+The web dashboard is still a stub in 0.2.0. The planned implementation will
 bind to loopback, require a token, enforce a path jail, and require explicit
 confirmation for writes.
 

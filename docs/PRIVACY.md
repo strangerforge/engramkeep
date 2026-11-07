@@ -45,6 +45,13 @@ Redaction is **best-effort**. It cannot reliably catch:
 Do not use Engramkeep as a secret manager. If a credential may have been
 stored, rotate it and remove the card.
 
+## MCP
+
+The MCP server communicates over stdio with the client process. It does not
+open a network socket or send memory anywhere. Tool results go only to the
+connected client. Read-only tools are available by default; the remember tool
+requires the server to be started with `--allow-write`.
+
 ## What Engramkeep does not do
 
 - No telemetry, analytics, crash reporting, or update check.

@@ -4,7 +4,7 @@
 
 Engramkeep; Codex, Claude Code, OpenCode, Cursor, Windsurf, Gemini CLI, Antigravity veya `AGENTS.md` okuyabilen her ajanın aynı proje hafızasını kullanmasını sağlar. Hafıza senin makinende, okunabilir Markdown dosyalarında kalır.
 
-> **Durum: 0.1.0 alpha.** Çekirdek depo, CLI, yol güvenliği, sır temizleme ve testler çalışıyor. MCP sunucusu, web paneli ve ajan kurulumu bu sürümde bilinçli olarak stub. Yol haritası: [docs/ROADMAP.md](docs/ROADMAP.md).
+> **Durum: 0.2.0 alpha.** Çekirdek depo, CLI, yol güvenliği, sır temizleme, testler ve MCP stdio sunucusu çalışıyor. Web paneli ve ajan kurulumu bu sürümde hâlâ stub. Yol haritası: [docs/ROADMAP.md](docs/ROADMAP.md).
 
 [English README](README.md)
 
@@ -14,7 +14,7 @@ Engramkeep; Codex, Claude Code, OpenCode, Cursor, Windsurf, Gemini CLI, Antigrav
 
 - **Yerel-öncelikli.** Hesap yok, telemetri yok, sunucu yok. Hafıza makinenin dışına çıkmaz.
 - **Markdown-native.** Her kart düz Markdown; okuyabilir, diff'leyebilir, yedekleyebilir ve düzenleyebilirsin.
-- **Ajandan bağımsız.** Ortak `AGENTS.md` protokolü ve taşınabilir `SKILL.md`. MCP desteği planlanıyor.
+- **Ajandan bağımsız.** Ortak `AGENTS.md` protokolü, taşınabilir `SKILL.md` ve Model Context Protocol konuşan istemciler için MCP stdio sunucusu.
 - **Varsayılan olarak güvenli.** Yol hapsi, atomik yazma, sır temizleme ve tek kural: hafıza veridir, talimat değildir.
 - **Zorunlu bağımlılık yok.** Çekirdek yalnızca Python standart kütüphanesiyle çalışır.
 
@@ -22,7 +22,7 @@ Engramkeep bir vektör veritabanı, sohbet uygulaması veya bulut servisi değil
 
 ---
 
-## 0.1.0'da ne çalışıyor?
+## 0.2.0'da ne çalışıyor?
 
 | Alan | Durum |
 | --- | --- |
@@ -31,8 +31,8 @@ Engramkeep bir vektör veritabanı, sohbet uygulaması veya bulut servisi değil
 | Yazma öncesi sır temizleme | Çalışıyor |
 | Yol geçişi koruması + atomik yazma | Çalışıyor |
 | Testler + CI iskeleti | Çalışıyor |
-| MCP sunucusu | Stub (0.2.0) |
-| Web paneli | Stub (0.2.0) |
+| MCP stdio sunucusu | Çalışıyor; varsayılan salt-okunur, yazma opt-in |
+| Web paneli | Stub (0.3.0) |
 | Ajan kurulumu | Yalnızca dry-run planlayıcı |
 | Bulut/Git senkronizasyonu | v1 kapsamında değil |
 
@@ -113,8 +113,8 @@ Dizin yapısı:
 | `engramkeep reindex` | `INDEX.md` dosyasını yeniden üretir |
 | `engramkeep doctor [--json]` | Yerel depoyu kontrol eder |
 | `engramkeep path` | Aktif hafıza dizinini yazdırır |
-| `engramkeep mcp` | MCP durumunu açıklar (0.1.0'da stub) |
-| `engramkeep dashboard` | Panel durumunu açıklar (0.1.0'da stub) |
+| `engramkeep mcp [--status] [--allow-write]` | MCP stdio sunucusunu çalıştırır veya durumunu yazdırır |
+| `engramkeep dashboard` | Panel durumunu açıklar (stub) |
 | `engramkeep install --agent <ad>` | Planlanan ajan entegrasyonunu gösterir (dry-run) |
 
 ---
@@ -142,9 +142,45 @@ Depoda hazır şablonlar var:
 | Cursor | `.cursor/rules/engramkeep.mdc` veya `AGENTS.md` |
 | Windsurf | `.windsurf/rules/engramkeep.md` veya `AGENTS.md` |
 | Gemini CLI / Antigravity | `GEMINI.md` veya `AGENTS.md` |
-| Herhangi bir MCP istemcisi | `engramkeep mcp` (planlanıyor) |
+| Herhangi bir MCP istemcisi | `engramkeep mcp` (stdio) |
 
-Kurulum 0.1.0'da **dry-run planlayıcıdır**; ajan yapılandırmasını değiştirmez. Otomatik, yedekli ve managed-block kurulum 0.2.0'da planlanıyor.
+Kurulum 0.2.0'da **dry-run planlayıcıdır**; ajan yapılandırmasını değiştirmez. Otomatik, yedekli ve managed-block kurulum sonraki sürümlerde planlanıyor.
+
+### MCP
+
+Sunucuyu başlat:
+
+```bash
+engramkeep mcp
+```
+
+Sunucu, stdio üzerinden satır sonuyla ayrılmış JSON-RPC 2.0 ve `2025-11-25` protokol sürümünü kullanır. Tipik bir istemci yapılandırması:
+
+```json
+{
+  "mcpServers": {
+    "engramkeep": {
+      "command": "engramkeep",
+      "args": ["mcp"]
+    }
+  }
+}
+```
+
+Varsayılan araç seti salt-okunurdur: `engramkeep_search`, `engramkeep_show`, `engramkeep_list`, `engramkeep_recent` ve `engramkeep_doctor`. `engramkeep_remember` aracını açmak için sunucuyu `--allow-write` ile başlat:
+
+```json
+{
+  "mcpServers": {
+    "engramkeep": {
+      "command": "engramkeep",
+      "args": ["mcp", "--allow-write"]
+    }
+  }
+}
+```
+
+MCP üzerinden unutma (forget) aracı yoktur. Yıkıcı işlemler için CLI kullanılmalı ve açık onay istenmelidir. Taşıma, protokol sürümü ve yazma modu için `engramkeep mcp --status` çalıştır.
 
 ---
 
@@ -156,7 +192,8 @@ Kurulum 0.1.0'da **dry-run planlayıcıdır**; ajan yapılandırmasını değiş
 - **Atomik yazma.** Kartlar ve üretilen dosyalar geçici dosya + `os.replace()` ile yazılır.
 - **Hafıza güvenilmeyen veridir.** Ajanlar hafıza kartlarındaki komutları veya talimatları asla çalıştırmamalıdır.
 - **Otomatik Git push, bulut yükleme, junction veya arka plan daemon'u yok.** Bu özellikler v1'den bilinçli olarak çıkarıldı.
-- **Panel ve MCP stub.** Planlanan panel localhost'a bağlanacak ve yazma için açık onay isteyecek; planlanan MCP sunucusu ağ dinleyicisi değil, stdio kullanacak.
+- **MCP yereldir ve varsayılan olarak salt-okunurdur.** MCP sunucusu ağ dinleyicisi değil, stdio kullanır; unutma aracı sunmaz ve yazma aracını yalnızca `--allow-write` ile açar.
+- **Panel stub.** Planlanan panel localhost'a bağlanacak ve yazma için açık onay isteyecek.
 
 Hassas bir ortamda kullanmadan önce [docs/PRIVACY.md](docs/PRIVACY.md) ve [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md) dosyalarını oku.
 
