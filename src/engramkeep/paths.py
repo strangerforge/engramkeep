@@ -1,0 +1,175 @@
+"""Filesystem helpers: strict path jail, atomic writes, private directories."""
+
+from __future__ import annotations
+
+import contextlib
+import os
+import re
+import stat
+import tempfile
+import unicodedata
+from pathlib import Path
+
+from .errors import PathSafetyError, ValidationError
+
+_WINDOWS_RESERVED = {
+    "CON",
+    "PRN",
+    "AUX",
+    "NUL",
+    *(f"COM{i}" for i in range(1, 10)),
+    *(f"LPT{i}" for i in range(1, 10)),
+}
+_INVALID_CHARS = set('<>:"/\\|?*')
+_MAX_PROJECT_ID = 64
+_PROJECT_ID_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+
+
+def _validate_component(part: str) -> None:
+    """Validate a single path component for cross-platform safety."""
+    if not isinstance(part, str):
+        raise PathSafetyError("path components must be strings")
+    if not part or part in {".", ".."}:
+        raise PathSafetyError(f"invalid path component: {part!r}")
+    if "\x00" in part or any(ord(char) < 32 for char in part):
+        raise PathSafetyError("path component contains control characters")
+    if any(char in _INVALID_CHARS for char in part):
+        raise PathSafetyError(f"path component contains a separator or invalid character: {part!r}")
+    if part != part.strip() or part.endswith("."):
+        raise PathSafetyError(f"path component has unsafe leading/trailing characters: {part!r}")
+    if len(part) > 255:
+        raise PathSafetyError("path component is too long")
+    stem = part.split(".", 1)[0].upper()
+    if stem in _WINDOWS_RESERVED:
+        raise PathSafetyError(f"reserved Windows filename: {part!r}")
+
+
+def _ensure_within(root: Path, candidate: Path) -> None:
+    """Raise when ``candidate`` is not inside ``root``."""
+    root_text = os.path.normcase(str(root))
+    candidate_text = os.path.normcase(str(candidate))
+    try:
+        common = os.path.commonpath([root_text, candidate_text])
+    except ValueError as exc:
+        raise PathSafetyError(f"path escapes the memory directory: {candidate}") from exc
+    if common != root_text:
+        raise PathSafetyError(f"path escapes the memory directory: {candidate}")
+
+
+def safe_join(root: Path | str, *parts: str) -> Path:
+    """Join validated components to ``root`` and prove the result stays inside.
+
+    The function rejects absolute paths, separators inside a component,
+    traversal segments, control characters, and reserved Windows names.
+    Symlinks are resolved, so a link pointing outside ``root`` is rejected.
+    """
+    root_path = Path(root).expanduser().resolve()
+    if not parts:
+        return root_path
+
+    candidate = root_path
+    for part in parts:
+        _validate_component(part)
+        candidate = candidate / part
+
+    resolved = candidate.resolve()
+    _ensure_within(root_path, resolved)
+    return resolved
+
+
+def normalize_project_id(value: str) -> str:
+    """Turn a user-supplied project name into a safe file stem."""
+    if not isinstance(value, str):
+        raise ValidationError("project name must be a string")
+    raw = value.strip()
+    if not raw:
+        raise ValidationError("project name must not be empty")
+    if "\x00" in raw or any(ord(char) < 32 for char in raw):
+        raise ValidationError("project name contains control characters")
+    if any(char in "/\\:" for char in raw) or ".." in raw:
+        raise ValidationError(f"invalid project name: {value!r}")
+
+    ascii_text = unicodedata.normalize("NFKD", raw).encode("ascii", "ignore").decode("ascii")
+    normalized = re.sub(r"[^a-z0-9]+", "-", ascii_text.lower()).strip("-")
+    if not normalized:
+        raise ValidationError("project name must contain ASCII letters or digits")
+    if len(normalized) > _MAX_PROJECT_ID:
+        raise ValidationError(f"project name is longer than {_MAX_PROJECT_ID} characters")
+    if not _PROJECT_ID_RE.match(normalized):
+        raise ValidationError(f"invalid project name: {value!r}")
+    if normalized.split(".", 1)[0].upper() in _WINDOWS_RESERVED:
+        raise ValidationError(f"reserved project name: {value!r}")
+    return normalized
+
+
+def display_title(project_id: str) -> str:
+    """Return a human-readable title for a project id."""
+    words = [word.capitalize() for word in project_id.split("-") if word]
+    return " ".join(words) or project_id
+
+
+def ensure_private_dir(path: Path | str) -> Path:
+    """Create a directory tree and best-effort restrict it to the current user."""
+    path = Path(path)
+    path.mkdir(parents=True, exist_ok=True)
+    with contextlib.suppress(OSError):
+        os.chmod(path, 0o700)
+    return path
+
+
+def atomic_write_text(path: Path | str, text: str, *, mode: int = 0o600) -> Path:
+    """Write UTF-8 text atomically using a temporary file and ``os.replace``."""
+    path = Path(path)
+    if not path.name:
+        raise PathSafetyError(f"invalid output path: {path}")
+    ensure_private_dir(path.parent)
+
+    descriptor, temporary_name = tempfile.mkstemp(
+        prefix=f".{path.name}.", suffix=".tmp", dir=str(path.parent)
+    )
+    temporary = Path(temporary_name)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8", newline="\n") as handle:
+            handle.write(text)
+            handle.flush()
+            os.fsync(handle.fileno())
+        with contextlib.suppress(OSError):
+            os.chmod(temporary, mode)
+        os.replace(temporary, path)
+        with contextlib.suppress(OSError):
+            os.chmod(path, mode)
+    except BaseException:
+        with contextlib.suppress(OSError):
+            os.unlink(temporary)
+        raise
+    return path
+
+
+def append_text(path: Path | str, text: str, *, mode: int = 0o600) -> Path:
+    """Append UTF-8 text to a regular file, rejecting symlinks."""
+    path = Path(path)
+    if path.is_symlink():
+        raise PathSafetyError(f"refusing to append through a symlink: {path}")
+    ensure_private_dir(path.parent)
+    with open(path, "a", encoding="utf-8", newline="\n") as handle:
+        handle.write(text)
+        handle.flush()
+        os.fsync(handle.fileno())
+    with contextlib.suppress(OSError):
+        os.chmod(path, mode)
+    return path
+
+
+def is_private_path(path: Path | str) -> bool:
+    """Return True when a path is not group/world accessible.
+
+    Windows ACLs are not represented by POSIX mode bits, so this check is
+    treated as satisfied there.
+    """
+    if os.name == "nt":
+        return True
+    try:
+        mode = stat.S_IMODE(Path(path).stat().st_mode)
+    except OSError:
+        return False
+    return (mode & 0o077) == 0

@@ -1,0 +1,64 @@
+name: Bug report
+description: Report a reproducible problem with Engramkeep.
+title: "bug: "
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. Do not include secrets, real memory data, or personal information.
+        Security issues must go through SECURITY.md, not this form.
+  - type: input
+    id: version
+    attributes:
+      label: Engramkeep version
+      placeholder: "0.1.0"
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: Operating system, Python version, and agent if relevant.
+      placeholder: "Windows 11, Python 3.12, OpenCode"
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Use synthetic project names and decisions.
+      placeholder: |
+        1. engramkeep init
+        2. engramkeep remember demo "..."
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: Include the error message if it contains no sensitive data.
+    validations:
+      required: true
+  - type: textarea
+    id: doctor
+    attributes:
+      label: Doctor output
+      description: Paste `engramkeep doctor` output after removing personal paths and data.
+      render: text
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checklist
+      options:
+        - label: I removed secrets, personal data, and real project names.
+          required: true
+        - label: This is not a security vulnerability.
+          required: true

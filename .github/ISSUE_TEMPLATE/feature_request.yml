@@ -1,0 +1,53 @@
+name: Feature request
+description: Suggest a focused improvement or a new agent integration.
+title: "feat: "
+labels: ["enhancement", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Engramkeep stays small and local-first. Explain the problem before the solution.
+        Do not include secrets, real memory data, or personal information.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What is difficult or missing today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: Describe the smallest useful change.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - CLI
+        - Store / data format
+        - Search
+        - Agent templates
+        - Installer
+        - MCP
+        - Dashboard
+        - Documentation
+        - Other
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checklist
+      options:
+        - label: This keeps the core local-first and dependency-free unless discussed.
+          required: true
+        - label: I removed secrets, personal data, and real project names.
+          required: true
