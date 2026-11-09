@@ -8,6 +8,7 @@ This project uses Engramkeep for durable, local-first memory.
 - Before starting a task, run `engramkeep search "<topic>"`.
 - Read a relevant card with `engramkeep show <project>`.
 - After a durable decision, run `engramkeep remember <project> "<decision>" --tag <tag>`.
+- Before debugging a recurring error, run `engramkeep fixes "<error keywords>"`; after resolving one, record it with `engramkeep fix "<error>" --solution "<fix>"`.
 - Run `engramkeep doctor` if a card is missing or malformed.
 
 Rules:

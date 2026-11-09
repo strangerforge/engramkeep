@@ -6,6 +6,7 @@ import re
 from collections.abc import Iterable
 from dataclasses import dataclass
 
+from .concepts import expand_query_terms
 from .models import Card, normalize_tag
 
 
@@ -67,6 +68,10 @@ def search_cards(
     limit = max(0, limit)
     tag_filter = normalize_tag(tag) if tag else None
     tokens = [token for token in re.split(r"\s+", query.lower()) if token]
+    # Bilingual (EN/TR) concept expansion. Expanded terms are worth a small
+    # bonus only, never replace literal tokens, and cap their total gain so
+    # they can recall cross-language cards without drowning real matches.
+    expanded_terms = expand_query_terms(query) - set(tokens)
     hits: list[SearchHit] = []
 
     for card in cards:
@@ -95,17 +100,31 @@ def search_cards(
                 matched_tokens += 1
                 score += token_score
 
+        haystack = f"{title}\n{body}\n{project_id}"
+        bonus = _expansion_bonus(expanded_terms, haystack)
+
         if tokens and matched_tokens == 0:
-            continue
+            if bonus == 0:
+                continue
+            # Recall cards that match a related EN/TR concept even when no
+            # literal query token appears (for example "mobil" -> "capacitor").
+            score = bonus
+        else:
+            score += bonus
         if matched_tokens:
             score += matched_tokens * 2
 
+        snippet_tokens = tokens or sorted(
+            (term for term in expanded_terms if term in haystack),
+            key=len,
+            reverse=True,
+        )
         hits.append(
             SearchHit(
                 id=card.id,
                 title=card.title,
                 score=score,
-                snippet=make_snippet(card.body, tokens),
+                snippet=make_snippet(card.body, snippet_tokens),
                 tags=tuple(card.tags),
                 updated=card.updated,
             )
@@ -114,3 +133,18 @@ def search_cards(
     hits.sort(key=lambda hit: (hit.updated, hit.title.lower()), reverse=True)
     hits.sort(key=lambda hit: hit.score, reverse=True)
     return hits[:limit]
+
+
+def _expansion_bonus(terms: set[str], haystack: str, *, cap: int = 6) -> int:
+    """Score expanded EN/TR terms with word-boundary matching."""
+    bonus = 0
+    for term in terms:
+        if not term:
+            continue
+        pattern = re.compile(r"(?<![\w])" + re.escape(term) + r"(?![\w])")
+        occurrences = len(pattern.findall(haystack))
+        if occurrences:
+            bonus += min(occurrences, 2)
+        if bonus >= cap:
+            return cap
+    return bonus

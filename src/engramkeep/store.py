@@ -30,6 +30,19 @@ from .paths import (
     safe_join,
 )
 from .redact import contains_secret, redact_text
+from .troubleshoot import (
+    MAX_ERROR_CHARS,
+    MAX_FIX_CHARS,
+    MAX_PROJECT_CHARS,
+    MAX_WORKSPACE_CHARS,
+    TROUBLESHOOTING_NAME,
+    FixHit,
+    TroubleEntry,
+    normalize_field,
+    parse_registry,
+    render_registry,
+    search_entries,
+)
 
 PROJECTS_DIR = "projects"
 TRASH_DIR = "trash"
@@ -133,6 +146,7 @@ class Store:
         self.index_path = self.home / INDEX_NAME
         self.recent_path = self.home / RECENT_NAME
         self.audit_path = self.home / AUDIT_NAME
+        self.troubleshooting_path = self.home / TROUBLESHOOTING_NAME
 
     def _read_meta(self) -> dict[str, object]:
         if self.meta_path.is_symlink():
@@ -209,6 +223,7 @@ class Store:
             (self.index_path, self._render_index([])),
             (self.recent_path, "# Recent Activity\n\n"),
             (self.audit_path, ""),
+            (self.troubleshooting_path, render_registry([])),
         )
         for path, content in starter_files:
             if path.exists():
@@ -362,17 +377,93 @@ class Store:
         bullets = [line for line in lines if line.startswith("- ")]
         return list(reversed(bullets[-limit:]))
 
+    def _read_troubleshooting(self) -> list[TroubleEntry]:
+        if not self.troubleshooting_path.exists():
+            return []
+        if self.troubleshooting_path.is_symlink():
+            raise StoreError("refusing to read TROUBLESHOOTING.md through a symlink")
+        if not self.troubleshooting_path.is_file():
+            raise StoreError("TROUBLESHOOTING.md is not a regular file")
+        try:
+            text = self.troubleshooting_path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError) as exc:
+            raise StoreError(f"cannot read {TROUBLESHOOTING_NAME}: {exc}") from exc
+        return parse_registry(text)
+
+    def _write_troubleshooting(self, entries: list[TroubleEntry]) -> None:
+        atomic_write_text(self.troubleshooting_path, render_registry(entries))
+
+    def record_fix(
+        self,
+        error: str,
+        fix: str,
+        *,
+        project: str | None = None,
+        workspace: str | None = None,
+    ) -> TroubleEntry:
+        """Record one resolved problem and its verified fix."""
+        self.require_initialized()
+        try:
+            clean_error = redact_text(
+                normalize_field(error, max_chars=MAX_ERROR_CHARS, name="error")
+            )
+            clean_fix = redact_text(normalize_field(fix, max_chars=MAX_FIX_CHARS, name="fix"))
+            clean_project = (
+                redact_text(normalize_field(project, max_chars=MAX_PROJECT_CHARS, name="project"))
+                if project is not None and str(project).strip()
+                else "General"
+            )
+            clean_workspace = (
+                redact_text(
+                    normalize_field(workspace, max_chars=MAX_WORKSPACE_CHARS, name="workspace")
+                )
+                if workspace is not None and str(workspace).strip()
+                else None
+            )
+        except ValueError as exc:
+            raise StoreError(str(exc)) from exc
+
+        entry = TroubleEntry(
+            project=clean_project,
+            error=clean_error,
+            fix=clean_fix,
+            workspace=clean_workspace,
+            date=utc_now_iso()[:10],
+        )
+        entries = self._read_troubleshooting()
+        entries.append(entry)
+        self._write_troubleshooting(entries)
+        self._append_recent(
+            f"recorded a fix for **{entry.project}**: {entry.error[:80]}",
+            None,
+            [],
+        )
+        self._audit(
+            "record_fix",
+            entry.project,
+            {"error": entry.error[:120], "workspace": entry.workspace or "General"},
+        )
+        return entry
+
+    def search_fixes(self, query: str | None, *, limit: int = 10) -> list[FixHit]:
+        """Search the troubleshooting registry, or list the newest entries."""
+        self.require_initialized()
+        entries = self._read_troubleshooting()
+        return search_entries(entries, query, limit=limit)
+
     def export_cards(self) -> dict[str, object]:
         """Return all valid cards as a JSON-serializable document."""
         self.require_initialized()
         scan = self.scan_cards()
         cards = sorted(scan.cards, key=lambda card: card.id)
-        return {
+        export_doc = {
             "schema_version": SCHEMA_VERSION,
             "exported_at": utc_now_iso(),
             "cards": [card.to_dict() for card in cards],
             "errors": list(scan.errors),
+            "fixes": [entry.to_dict() for entry in self._read_troubleshooting()],
         }
+        return export_doc
 
     def doctor(self) -> DoctorReport:
         """Inspect the store without modifying it."""
@@ -410,6 +501,10 @@ class Store:
             report.warnings.append("RECENT_ACTIVITY.md is missing")
         if not report.audit_present:
             report.warnings.append("audit.log is missing")
+        if not self.troubleshooting_path.is_file():
+            report.warnings.append(
+                "TROUBLESHOOTING.md is missing; run 'engramkeep init' to create it"
+            )
         if not report.permissions_ok:
             report.warnings.append("store directory is accessible by group or others")
 
@@ -419,12 +514,18 @@ class Store:
         for card in scan.cards:
             if contains_secret(render_card(card)):
                 report.unredacted.append(card.id)
+        try:
+            for entry in self._read_troubleshooting():
+                if contains_secret(f"{entry.error}\n{entry.fix}\n{entry.workspace or ''}"):
+                    report.unredacted.append(f"fix:{entry.project}")
+        except StoreError as exc:
+            report.errors.append(str(exc))
 
         if report.malformed:
             report.errors.append(f"{len(report.malformed)} malformed card(s)")
         if report.unredacted:
             report.errors.append(
-                f"{len(report.unredacted)} card(s) contain unredacted secrets or PII"
+                f"{len(report.unredacted)} memory entr(y/ies) contain unredacted secrets or PII"
             )
 
         report.ok = not report.errors

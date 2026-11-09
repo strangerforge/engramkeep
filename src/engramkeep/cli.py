@@ -15,6 +15,7 @@ from .models import render_card
 from .paths import atomic_write_text
 from .search import SearchHit, search_cards
 from .store import Store
+from .troubleshoot import FixHit
 
 
 def _print_json(data: object) -> None:
@@ -129,6 +130,44 @@ def _cmd_recent(args: argparse.Namespace) -> int:
         print("No activity yet.")
         return 0
     print("\n".join(lines))
+    return 0
+
+
+def _format_fix(hit: FixHit) -> str:
+    payload = hit.entry
+    workspace = payload.workspace or "General"
+    lines = [f"{payload.project} ({payload.date})"]
+    lines.append(f"  workspace: {workspace}")
+    lines.append(f"  problem: {payload.error}")
+    lines.append(f"  fix: {payload.fix}")
+    return "\n".join(lines)
+
+
+def _cmd_fix(args: argparse.Namespace) -> int:
+    store = _open_store(args, create=True)
+    entry = store.record_fix(
+        args.error,
+        args.solution,
+        project=args.project,
+        workspace=args.workspace,
+    )
+    if args.json:
+        _print_json(entry.to_dict())
+    else:
+        print(f"Recorded fix for {entry.project}: {entry.error[:80]}")
+    return 0
+
+
+def _cmd_fixes(args: argparse.Namespace) -> int:
+    store = _open_store(args)
+    hits = store.search_fixes(args.query, limit=args.limit)
+    if args.json:
+        _print_json([hit.to_dict() for hit in hits])
+        return 0
+    if not hits:
+        print("No fixes recorded yet." if not args.query else "No matching fixes.")
+        return 0
+    print("\n\n".join(_format_fix(hit) for hit in hits))
     return 0
 
 
@@ -288,6 +327,25 @@ def build_parser() -> argparse.ArgumentParser:
     forget.add_argument("--yes", action="store_true", help="confirm the move")
     forget.set_defaults(handler=_cmd_forget)
 
+    fix = subparsers.add_parser("fix", help="record a resolved error and its verified fix")
+    fix.add_argument("error", help="the error or problem that was resolved")
+    fix.add_argument("--solution", required=True, help="the verified fix that worked")
+    fix.add_argument("--project", help="project name (default: General)")
+    fix.add_argument("--workspace", help="workspace path or label")
+    fix.add_argument("--json", action="store_true", help="print JSON")
+    fix.set_defaults(handler=_cmd_fix)
+
+    fixes = subparsers.add_parser("fixes", help="search the troubleshooting registry")
+    fixes.add_argument(
+        "query",
+        nargs="?",
+        default=None,
+        help="search terms (run without it to list the newest fixes)",
+    )
+    fixes.add_argument("--limit", type=int, default=10, help="maximum results (default: 10)")
+    fixes.add_argument("--json", action="store_true", help="print JSON")
+    fixes.set_defaults(handler=_cmd_fixes)
+
     export = subparsers.add_parser("export", help="export all cards as JSON")
     export.add_argument("--output", metavar="FILE", help="write to FILE instead of stdout")
     export.add_argument("--force", action="store_true", help="overwrite an existing output file")
@@ -308,7 +366,7 @@ def build_parser() -> argparse.ArgumentParser:
     mcp.add_argument(
         "--allow-write",
         action="store_true",
-        help="enable the engramkeep_remember tool",
+        help="enable the engramkeep_remember and engramkeep_record_fix tools",
     )
     mcp.set_defaults(handler=_cmd_mcp)
 

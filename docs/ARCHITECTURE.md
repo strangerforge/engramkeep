@@ -23,11 +23,13 @@ keyword search. The security properties come from what is *not* in the core.
 | `paths.py` | Validate path components, enforce the path jail, write atomically, create private directories. |
 | `redact.py` | Best-effort secret and email redaction before storage. |
 | `models.py` | Card dataclass, frontmatter parser/renderer, decision and tag mutation. |
-| `search.py` | Keyword scoring, tag filtering, snippets. |
-| `store.py` | Store lifecycle, cards, index, activity log, audit trail, trash, doctor. |
+| `concepts.py` | Deterministic bilingual EN/TR concept expansion used by search and the registry. |
+| `search.py` | Keyword scoring, tag filtering, bilingual expansion bonus, snippets. |
+| `store.py` | Store lifecycle, cards, index, activity log, audit trail, trash, doctor, troubleshooting registry. |
+| `troubleshoot.py` | Troubleshooting registry: parse/render `TROUBLESHOOTING.md`, scoring, untrusted-data handling. |
 | `cli.py` | argparse command-line interface. |
 | `installer.py` | Dry-run agent integration planner. |
-| `mcp_server.py` | MCP stdio server: newline-delimited JSON-RPC, read-only tools, opt-in write tool. |
+| `mcp_server.py` | MCP stdio server: newline-delimited JSON-RPC, read-only tools, opt-in write tools. |
 | `dashboard.py` | Hardened loopback dashboard: token auth, strict CSP, path jail, read-only API, opt-in POST remember. |
 | `adapters/` | Reserved for future read-only transcript adapters. |
 
@@ -61,6 +63,7 @@ instead of guessing.
 ├── meta.json              # schema version and creation time
 ├── INDEX.md               # generated project index
 ├── RECENT_ACTIVITY.md     # human-readable activity bullets
+├── TROUBLESHOOTING.md     # resolved errors and verified fixes
 ├── audit.log              # append-only JSON Lines metadata
 ├── projects/
 │   └── <project-id>.md

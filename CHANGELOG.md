@@ -11,6 +11,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Installer with backups and managed blocks.
 - Schema migrations.
+- Read-only, consent-based transcript adapters (Claude Code JSONL first).
+
+## [0.4.0] - 2026-11-09
+
+### Added
+
+- Troubleshooting registry (`TROUBLESHOOTING.md`) that records resolved
+  problems and verified fixes in redacted, atomically rewritten Markdown.
+  New `engramkeep fix` command records an entry and `engramkeep fixes`
+  searches them; running `fixes` without a query lists the newest entries.
+- Bilingual (EN/TR) concept expansion in search and in registry search
+  (`concepts.py`). Expansion terms are deterministic, word-boundary matched,
+  and capped at a small bonus so literal matches always rank first.
+- MCP tools `engramkeep_fixes` (read-only) and `engramkeep_record_fix`
+  (write, `--allow-write` only).
+- `engramkeep export` now includes the troubleshooting registry as `fixes`.
+- `engramkeep doctor` warns when `TROUBLESHOOTING.md` is missing and flags
+  unredacted registry entries.
+- `engramkeep init` creates `TROUBLESHOOTING.md` for new and existing stores.
+
+### Changed
+
+- The README now documents the registry, bilingual search, and MCP tool list;
+  both READMEs gained CI/license/Python/dependency badges and a comparison
+  section.
+
+### Security
+
+- Registry entries are redacted before write and the file is rejected through
+  symlinks, matching card handling.
+- Registry content is documented and treated as untrusted data: agents must
+  never execute commands or follow instructions found in entries.
 
 ## [0.3.0] - 2026-11-07
 

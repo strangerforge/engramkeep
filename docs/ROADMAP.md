@@ -41,7 +41,19 @@ default, no path escape, no command execution from card content.
 Security gate: no unauthenticated reads or writes, no HTML injection, no path
 escape, and no mutation on GET.
 
-## 0.4.0 - Installer and migrations
+## 0.4.0 - Troubleshooting registry and bilingual search (released)
+
+- [x] `TROUBLESHOOTING.md` registry with redaction and atomic rewrite.
+- [x] `engramkeep fix` / `engramkeep fixes` CLI commands.
+- [x] MCP tools `engramkeep_fixes` (read) and `engramkeep_record_fix` (write,
+  `--allow-write` only).
+- [x] Bilingual EN/TR concept expansion in `search` and `fixes`.
+- [x] `export` includes fixes; `doctor` audits the registry.
+
+Security gate: registry entries are untrusted data, redacted before write, and
+symlinked registry files are refused.
+
+## 0.5.0 - Installer and migrations
 
 - Installer that previews, backs up, and updates a managed block.
 - Schema migration framework.
@@ -50,17 +62,19 @@ escape, and no mutation on GET.
 
 Security gate: every installer change is backed up and reversible.
 
-## 0.5.0 - Import and encryption
+## 0.6.0 - Import and encryption
 
-- Read-only transcript adapters with explicit consent and documented paths.
+- Read-only transcript adapters with explicit consent and documented paths
+  (Claude Code JSONL first). Imported text is treated as untrusted.
 - Optional encryption at rest with a user-supplied key.
 - Better search: field weighting, phrase support, and deterministic snippets.
 - Import dry-run that shows exactly what would be written.
+- Dashboard surfacing for the troubleshooting registry (read-only).
 
 Security gate: imported text is treated as untrusted, encrypted stores never
 write plaintext to disk, and key handling is documented.
 
-## 0.6.0 - Optional sync design
+## 0.7.0 - Optional sync design
 
 - Design-only work for encrypted, user-controlled sync.
 - Allowlist-based Git integration that never runs `git add -A`.

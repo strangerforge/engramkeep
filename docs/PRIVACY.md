@@ -15,6 +15,12 @@ When you run `engramkeep remember`, the store writes:
 
 The store does not write the decision text into the audit log.
 
+When you run `engramkeep fix`, the store writes a troubleshooting registry
+(`TROUBLESHOOTING.md`) with the error text, the fix you provided, an optional
+project label and workspace path. Registry entries pass through the same
+redaction as cards, are rewritten atomically, and are treated as untrusted
+data by agents.
+
 ## Where it is stored
 
 | Platform | Default location |

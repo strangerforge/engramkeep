@@ -5,7 +5,7 @@ Engramkeep 0.3.0. It is intentionally conservative.
 
 ## Assets
 
-- Memory cards and generated files in the local store.
+- Memory cards, generated files, and the troubleshooting registry in the local store.
 - The user's filesystem and agent configuration.
 - The integrity of the agent's behavior when it reads memory.
 - The user's credentials and personal data that might appear in text.
@@ -29,8 +29,8 @@ Engramkeep 0.3.0. It is intentionally conservative.
 | --- | --- | --- |
 | Path traversal through a project name | `normalize_project_id()` rejects separators, drive letters, control characters, and traversal; `safe_join()` proves containment | A bug in a future caller could bypass the helper |
 | Symlink escape | `safe_join()` resolves symlinks; card scanning rejects symlinks; `append_text()` rejects symlinks | Junction behavior on some Windows versions is not exhaustively tested |
-| Secret written to a card | `redact_text()` covers common token formats, private-key blocks, bearer tokens, credential assignments, and email | Encoded or novel secrets can pass through |
-| Prompt injection in a card | Documentation, skill, and templates state that memory is data, not instructions; the core never executes card text | An agent can still choose to follow malicious text |
+| Secret written to a card or registry entry | `redact_text()` covers common token formats, private-key blocks, bearer tokens, credential assignments, and email | Encoded or novel secrets can pass through |
+| Prompt injection in a card or registry entry | Documentation, skill, and templates state that memory is data, not instructions; the core never executes card or registry text | An agent can still choose to follow malicious text |
 | Malicious Markdown | Cards are rendered as text by the CLI and the dashboard; the dashboard sends a strict CSP and never uses `innerHTML` | A browser bug or a future renderer could reintroduce HTML injection |
 | Local attacker or malware | Files are created with private permissions where the OS supports it; there is no external network surface, and the dashboard is loopback-only | Same-user malware can read the files |
 | Destructive action | `forget` requires `--yes`; cards move to trash instead of being deleted | Trash retains data until manually removed |
@@ -39,8 +39,8 @@ Engramkeep 0.3.0. It is intentionally conservative.
 | Denial of service via huge input | Decision text is capped at 4000 characters; path components are bounded | Very large hand-written files are not size-limited |
 | Malformed card crashes a command | Parse errors are reported; `doctor` surfaces them | A malformed card is skipped by search/list |
 | Audit log tampering | Append-only by convention; no cryptographic sealing | A local user can edit the file |
-| Store schema confusion | `meta.json` schema version is validated; newer/older versions are rejected | No migration exists in 0.3.0 |
-| MCP write tool misuse | `engramkeep_remember` is not listed or callable unless the server starts with `--allow-write`; there is no MCP forget tool | A user who enables `--allow-write` gives the client permission to add cards |
+| Store schema confusion | `meta.json` schema version is validated; newer/older versions are rejected | No migration exists yet |
+| MCP write tool misuse | `engramkeep_remember` and `engramkeep_record_fix` are not listed or callable unless the server starts with `--allow-write`; there is no MCP forget tool | A user who enables `--allow-write` gives the client permission to add cards |
 | MCP network exposure | stdio transport only; the server never opens a socket | A client can still send arbitrary JSON-RPC |
 | MCP denial of service | Request lines are capped at 1 MiB; queries, tags, and limits are bounded | A client can send many requests |
 | MCP malformed input | Invalid JSON, UTF-8, batches, and arguments produce JSON-RPC errors without crashing the loop | Error text can reveal local paths |

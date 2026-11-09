@@ -103,8 +103,10 @@ def test_initialize_and_tools_list(home: Path) -> None:
         "engramkeep_list",
         "engramkeep_recent",
         "engramkeep_doctor",
+        "engramkeep_fixes",
     }
     assert "engramkeep_remember" not in tools
+    assert "engramkeep_record_fix" not in tools
     for tool in tools.values():
         assert tool["annotations"]["readOnlyHint"] is True
         assert tool["annotations"]["destructiveHint"] is False
@@ -128,9 +130,15 @@ def test_write_tool_requires_explicit_opt_in(home: Path) -> None:
     )
     tools = {tool["name"]: tool for tool in responses[1]["result"]["tools"]}
     assert "engramkeep_remember" in tools
+    assert "engramkeep_record_fix" in tools
+    assert "engramkeep_fixes" in tools
     annotations = tools["engramkeep_remember"]["annotations"]
     assert annotations["readOnlyHint"] is False
     assert annotations["destructiveHint"] is False
+    write_annotations = tools["engramkeep_record_fix"]["annotations"]
+    assert write_annotations["readOnlyHint"] is False
+    fix_annotations = tools["engramkeep_fixes"]["annotations"]
+    assert fix_annotations["readOnlyHint"] is True
 
 
 def test_read_tools(store: Store, home: Path) -> None:
@@ -206,6 +214,61 @@ def test_remember_with_allow_write_redacts_secrets(store: Store, home: Path) -> 
     assert secret not in card.body
     assert "[REDACTED]" in card.body
     assert card.tags == ["security"]
+
+
+def test_recorded_fix_is_hidden_and_rejected_without_allow_write(store: Store, home: Path) -> None:
+    responses, _ = run_server(
+        [
+            INITIALIZE,
+            call_tool(
+                "engramkeep_record_fix",
+                {"error_message": "boom", "solution": "patch it"},
+            ),
+        ],
+        home=home,
+    )
+    assert responses[1]["error"]["code"] == -32602
+    assert "--allow-write" in responses[1]["error"]["message"]
+
+
+def test_record_and_search_fix_roundtrip(store: Store, home: Path) -> None:
+    secret = "ghp_" + "b" * 36
+    responses, _ = run_server(
+        [
+            INITIALIZE,
+            call_tool(
+                "engramkeep_record_fix",
+                {
+                    "error_message": f"deploy failed with token {secret}",
+                    "solution": "rotate the token and redeploy",
+                    "project": "api",
+                },
+                request_id=2,
+            ),
+            call_tool("engramkeep_fixes", {"query": "deploy"}, request_id=3),
+        ],
+        home=home,
+        allow_write=True,
+    )
+
+    recorded = tool_payload(responses[1])
+    assert secret not in json.dumps(recorded)
+    assert "[REDACTED]" in recorded["error"]
+
+    found = tool_payload(responses[2])
+    assert len(found["fixes"]) == 1
+    assert found["fixes"][0]["project"] == "api"
+
+
+def test_fixes_lists_newest_without_query(store: Store, home: Path) -> None:
+    store.record_fix("first problem", "first fix", project="one")
+    store.record_fix("second problem", "second fix", project="two")
+    responses, _ = run_server(
+        [INITIALIZE, call_tool("engramkeep_fixes", {}, request_id=2)],
+        home=home,
+    )
+    found = tool_payload(responses[1])
+    assert [fix["project"] for fix in found["fixes"]] == ["two", "one"]
 
 
 def test_missing_store_returns_tool_error(home: Path) -> None:

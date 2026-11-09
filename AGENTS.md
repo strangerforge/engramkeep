@@ -40,9 +40,11 @@ ruff format --check .
 - `src/engramkeep/redact.py` — secret redaction before anything is stored.
 - `src/engramkeep/models.py` — project card model, frontmatter parser/renderer.
 - `src/engramkeep/store.py` — store operations, index, audit log, trash.
-- `src/engramkeep/search.py` — keyword search and snippets.
+- `src/engramkeep/search.py` — keyword search, bilingual EN/TR expansion bonus, and snippets.
+- `src/engramkeep/concepts.py` — deterministic bilingual EN/TR concept map; no project-specific terms, no network.
+- `src/engramkeep/troubleshoot.py` — troubleshooting registry (`TROUBLESHOOTING.md`); pure parse/render/scoring, I/O stays in `store.py`.
 - `src/engramkeep/cli.py` — argparse CLI.
-- `src/engramkeep/mcp_server.py` — MCP stdio server; read-only tools plus opt-in write tool.
+- `src/engramkeep/mcp_server.py` — MCP stdio server; read-only tools plus opt-in write tools (`--allow-write`); no forget tool.
 - `src/engramkeep/dashboard.py` — loopback-only dashboard with token auth, CSP, path jail, and opt-in writes.
 - `src/engramkeep/installer.py` — dry-run planner only.
 - `src/engramkeep/adapters/` — future transcript adapters.
