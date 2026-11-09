@@ -28,7 +28,7 @@ keyword search. The security properties come from what is *not* in the core.
 | `cli.py` | argparse command-line interface. |
 | `installer.py` | Dry-run agent integration planner. |
 | `mcp_server.py` | MCP stdio server: newline-delimited JSON-RPC, read-only tools, opt-in write tool. |
-| `dashboard.py` | Stub; planned loopback-only dashboard. |
+| `dashboard.py` | Hardened loopback dashboard: token auth, strict CSP, path jail, read-only API, opt-in POST remember. |
 | `adapters/` | Reserved for future read-only transcript adapters. |
 
 ## Data flow
@@ -77,7 +77,7 @@ instead of guessing.
 }
 ```
 
-A newer schema is rejected. An older schema is rejected in 0.2.0 because no
+A newer schema is rejected. An older schema is rejected in 0.3.0 because no
 migration is implemented yet.
 
 ### Card format
@@ -123,13 +123,17 @@ metadata. Decision text is not copied into the audit log. Example:
 - `append_text()` rejects symlinks.
 - `scan_cards()` rejects symlinks and non-regular files.
 - Cards are redacted before write.
-- The core imports no networking or subprocess modules.
+- The store, CLI, and MCP modules import no networking or subprocess modules.
+  Only `dashboard.py` binds a loopback listener.
 - Destructive commands require `--yes`.
-- The installer never writes files in 0.2.0.
+- The installer never writes files in 0.3.0.
 - MCP uses stdio only, is read-only by default, and has no forget tool.
 - The MCP write tool exists only when the server is started with
   `--allow-write`.
-- The dashboard is a stub.
+- The dashboard binds to `127.0.0.1`, requires a per-session token, and
+  validates the Host header and any Origin on writes.
+- The dashboard renders card content as text and never mutates on GET.
+- Dashboard writes require `--allow-write` and `confirm: true`.
 
 ## Extension points
 
@@ -138,11 +142,12 @@ Future features must preserve the invariants above:
 - **MCP server (0.2.0, implemented):** stdio, newline-delimited JSON,
   protocol version 2025-11-25, no network listener, read-only by default, and
   an explicit `--allow-write` opt-in for the remember tool.
-- **Dashboard (0.3.0):** bind to `127.0.0.1`, require a per-session token,
-  enforce a path jail, use CSP, render card text as text, POST-only mutations.
-- **Installer (0.3.0):** preview by default, back up before changing agent
+- **Dashboard (0.3.0, implemented):** bind to `127.0.0.1`, require a
+  per-session token, enforce a path jail, use strict CSP, render card content
+  as text, and keep mutations POST-only behind `--allow-write`.
+- **Installer (0.4.0):** preview by default, back up before changing agent
   configuration, update a managed block, never overwrite unrelated content.
-- **Adapters (0.4.0):** explicit consent, documented source paths, read-only,
+- **Adapters (0.5.0):** explicit consent, documented source paths, read-only,
   no upload.
 
 ## Testing strategy
@@ -153,6 +158,9 @@ Future features must preserve the invariants above:
 - CLI tests set `ENGRAMKEEP_HOME` and capture output.
 - MCP tests drive `serve()` with in-memory byte streams and cover protocol
   negotiation, tool schemas, write gating, framing, size limits, and errors.
+- Dashboard tests start a real server on an ephemeral loopback port and use
+  `http.client` to cover token auth, Host and Origin checks, CSP, path
+  traversal, body limits, read-only defaults, and confirmation.
 - A repository hygiene test checks for personal paths, secrets, required
   files, and unsafe artifacts.
 - CI runs on Windows, Linux, and macOS across supported Python versions.

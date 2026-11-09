@@ -210,12 +210,20 @@ def _cmd_mcp(args: argparse.Namespace) -> int:
     return mcp_server.serve(resolve_home(args.home), allow_write=args.allow_write)
 
 
-def _cmd_dashboard() -> int:
-    info = dashboard.status()
-    print(f"Dashboard: {info['status']}")
-    print(f"Bind: {info['bind']}")
-    print(f"Writes: {info['writes']}")
-    return 0
+def _cmd_dashboard(args: argparse.Namespace) -> int:
+    if args.status:
+        info = dashboard.status()
+        print(f"Dashboard: {info['status']}")
+        print(f"Bind: {info['bind']}")
+        print(f"Auth: {info['auth']}")
+        print(f"Writes: {info['writes']}")
+        print(f"CSP: {info['csp']}")
+        return 0
+    return dashboard.serve(
+        resolve_home(args.home),
+        port=args.port,
+        allow_write=args.allow_write,
+    )
 
 
 def _cmd_install(args: argparse.Namespace) -> int:
@@ -304,8 +312,20 @@ def build_parser() -> argparse.ArgumentParser:
     )
     mcp.set_defaults(handler=_cmd_mcp)
 
-    dashboard_parser = subparsers.add_parser("dashboard", help="show dashboard status")
-    dashboard_parser.set_defaults(handler=lambda _args: _cmd_dashboard())
+    dashboard_parser = subparsers.add_parser("dashboard", help="run the local dashboard")
+    dashboard_parser.add_argument("--status", action="store_true", help="print status and exit")
+    dashboard_parser.add_argument(
+        "--port",
+        type=int,
+        default=dashboard.DEFAULT_PORT,
+        help=f"loopback port (default: {dashboard.DEFAULT_PORT}; 0 picks a free port)",
+    )
+    dashboard_parser.add_argument(
+        "--allow-write",
+        action="store_true",
+        help="enable the remember form",
+    )
+    dashboard_parser.set_defaults(handler=_cmd_dashboard)
 
     install = subparsers.add_parser("install", help="show an agent integration plan (dry run)")
     install.add_argument("--agent", required=True, help="agent identifier")

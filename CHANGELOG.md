@@ -9,9 +9,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Planned
 
-- Hardened local dashboard.
 - Installer with backups and managed blocks.
 - Schema migrations.
+
+## [0.3.0] - 2026-11-07
+
+### Added
+
+- Hardened local dashboard (`engramkeep dashboard`) that binds to `127.0.0.1`
+  only and requires a per-session token.
+- Read-only dashboard API for projects, cards, search, recent activity, and
+  doctor output.
+- Opt-in remember form, enabled only with `--allow-write`, that requires an
+  explicit confirmation flag.
+- `engramkeep dashboard --status` for machine-readable bind, auth, write, and
+  CSP information.
+- Dashboard tests covering token auth, Host and Origin checks, CSP, path
+  traversal, body limits, read-only defaults, confirmation, and redaction.
+
+### Security
+
+- The dashboard has no CORS surface, sends a strict Content-Security-Policy,
+  and renders card content as text instead of HTML.
+- Mutations are POST-only; GET requests never change state.
+- The server validates the Host header and rejects cross-origin POST requests.
+- Request bodies are capped at 64 KiB and every field is bounded.
+- The session token is delivered in the URL fragment and kept in
+  `sessionStorage`; it is never written into the HTML shell.
+
+### Fixed
+
+- Dashboard rejections now consume a small request body before responding, so
+  Windows clients reliably receive the JSON error instead of a connection
+  reset.
 
 ## [0.2.0] - 2026-11-07
 

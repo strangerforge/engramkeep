@@ -4,7 +4,7 @@
 
 Engramkeep; Codex, Claude Code, OpenCode, Cursor, Windsurf, Gemini CLI, Antigravity veya `AGENTS.md` okuyabilen her ajanın aynı proje hafızasını kullanmasını sağlar. Hafıza senin makinende, okunabilir Markdown dosyalarında kalır.
 
-> **Durum: 0.2.0 alpha.** Çekirdek depo, CLI, yol güvenliği, sır temizleme, testler ve MCP stdio sunucusu çalışıyor. Web paneli ve ajan kurulumu bu sürümde hâlâ stub. Yol haritası: [docs/ROADMAP.md](docs/ROADMAP.md).
+> **Durum: 0.3.0 alpha.** Çekirdek depo, CLI, yol güvenliği, sır temizleme, testler, MCP stdio sunucusu ve sertleştirilmiş yerel panel çalışıyor. Ajan kurulumu bu sürümde hâlâ dry-run planlayıcı. Yol haritası: [docs/ROADMAP.md](docs/ROADMAP.md).
 
 [English README](README.md)
 
@@ -22,7 +22,7 @@ Engramkeep bir vektör veritabanı, sohbet uygulaması veya bulut servisi değil
 
 ---
 
-## 0.2.0'da ne çalışıyor?
+## 0.3.0'da ne çalışıyor?
 
 | Alan | Durum |
 | --- | --- |
@@ -32,7 +32,7 @@ Engramkeep bir vektör veritabanı, sohbet uygulaması veya bulut servisi değil
 | Yol geçişi koruması + atomik yazma | Çalışıyor |
 | Testler + CI iskeleti | Çalışıyor |
 | MCP stdio sunucusu | Çalışıyor; varsayılan salt-okunur, yazma opt-in |
-| Web paneli | Stub (0.3.0) |
+| Web paneli | Çalışıyor; loopback + token, yazma opt-in |
 | Ajan kurulumu | Yalnızca dry-run planlayıcı |
 | Bulut/Git senkronizasyonu | v1 kapsamında değil |
 
@@ -114,7 +114,7 @@ Dizin yapısı:
 | `engramkeep doctor [--json]` | Yerel depoyu kontrol eder |
 | `engramkeep path` | Aktif hafıza dizinini yazdırır |
 | `engramkeep mcp [--status] [--allow-write]` | MCP stdio sunucusunu çalıştırır veya durumunu yazdırır |
-| `engramkeep dashboard` | Panel durumunu açıklar (stub) |
+| `engramkeep dashboard [--status] [--port PORT] [--allow-write]` | Yerel paneli çalıştırır veya durumunu yazdırır |
 | `engramkeep install --agent <ad>` | Planlanan ajan entegrasyonunu gösterir (dry-run) |
 
 ---
@@ -144,7 +144,7 @@ Depoda hazır şablonlar var:
 | Gemini CLI / Antigravity | `GEMINI.md` veya `AGENTS.md` |
 | Herhangi bir MCP istemcisi | `engramkeep mcp` (stdio) |
 
-Kurulum 0.2.0'da **dry-run planlayıcıdır**; ajan yapılandırmasını değiştirmez. Otomatik, yedekli ve managed-block kurulum sonraki sürümlerde planlanıyor.
+Kurulum 0.3.0'da **dry-run planlayıcıdır**; ajan yapılandırmasını değiştirmez. Otomatik, yedekli ve managed-block kurulum sonraki sürümlerde planlanıyor.
 
 ### MCP
 
@@ -182,6 +182,24 @@ Varsayılan araç seti salt-okunurdur: `engramkeep_search`, `engramkeep_show`, `
 
 MCP üzerinden unutma (forget) aracı yoktur. Yıkıcı işlemler için CLI kullanılmalı ve açık onay istenmelidir. Taşıma, protokol sürümü ve yazma modu için `engramkeep mcp --status` çalıştır.
 
+### Panel
+
+Yerel paneli başlat:
+
+```bash
+engramkeep dashboard
+```
+
+Panel `127.0.0.1` adresine bağlanır ve fragment içinde oturum token'ı bulunan bir URL yazdırır. Token HTML'e gömülmez; tarayıcı onu `sessionStorage` içinde tutar ve `X-Engramkeep-Token` başlığıyla gönderir.
+
+Panel varsayılan olarak salt-okunurdur. Hatırlama formunu açmak için:
+
+```bash
+engramkeep dashboard --allow-write
+```
+
+Yazmalar yalnızca POST ile ve `confirm: true` ile yapılır. Unutma (forget) düğmesi yoktur. Boş bir port için `--port 0` kullan; makine tarafından okunabilir güvenlik bilgisi için `engramkeep dashboard --status` çalıştır.
+
 ---
 
 ## Güvenlik ve gizlilik
@@ -193,7 +211,7 @@ MCP üzerinden unutma (forget) aracı yoktur. Yıkıcı işlemler için CLI kull
 - **Hafıza güvenilmeyen veridir.** Ajanlar hafıza kartlarındaki komutları veya talimatları asla çalıştırmamalıdır.
 - **Otomatik Git push, bulut yükleme, junction veya arka plan daemon'u yok.** Bu özellikler v1'den bilinçli olarak çıkarıldı.
 - **MCP yereldir ve varsayılan olarak salt-okunurdur.** MCP sunucusu ağ dinleyicisi değil, stdio kullanır; unutma aracı sunmaz ve yazma aracını yalnızca `--allow-write` ile açar.
-- **Panel stub.** Planlanan panel localhost'a bağlanacak ve yazma için açık onay isteyecek.
+- **Panel yalnızca loopback'te ve token korumalı.** `127.0.0.1` adresine bağlanır, oturum başına token ister, sıkı CSP gönderir, kart içeriğini metin olarak işler ve yazmayı yalnızca `--allow-write` ile açık onay birlikte verildiğinde etkinleştirir.
 
 Hassas bir ortamda kullanmadan önce [docs/PRIVACY.md](docs/PRIVACY.md) ve [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md) dosyalarını oku.
 

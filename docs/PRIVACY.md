@@ -52,6 +52,17 @@ open a network socket or send memory anywhere. Tool results go only to the
 connected client. Read-only tools are available by default; the remember tool
 requires the server to be started with `--allow-write`.
 
+## Dashboard
+
+The dashboard is a local HTTP server bound to `127.0.0.1`. It does not contact
+the internet. The per-session token is delivered in the URL fragment, kept in
+the browser's `sessionStorage`, and sent only to the loopback server in the
+`X-Engramkeep-Token` header. The dashboard sets no cookies, sends no CORS
+headers, and logs only the HTTP method and path, not query strings or headers.
+
+The dashboard is read-only by default. Writes are enabled only with
+`--allow-write` and still require an explicit confirmation.
+
 ## What Engramkeep does not do
 
 - No telemetry, analytics, crash reporting, or update check.

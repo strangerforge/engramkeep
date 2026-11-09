@@ -15,7 +15,7 @@ release.
 - Tests, CI skeleton, repository hygiene check.
 - MCP and dashboard were stubs.
 
-## 0.2.0 - MCP (current)
+## 0.2.0 - MCP (released)
 
 - [x] MCP stdio server with newline-delimited JSON-RPC 2.0 and protocol
   version 2025-11-25.
@@ -28,18 +28,29 @@ release.
 Security gate: threat model updated, no network listener, no write tool by
 default, no path escape, no command execution from card content.
 
-## 0.3.0 - Dashboard and installer
+## 0.3.0 - Dashboard (current)
 
-- Hardened dashboard: loopback bind, per-session token, CSP, path jail,
-  text-only rendering, POST-only mutations.
+- [x] Hardened dashboard: loopback bind, per-session token, strict CSP, path
+  jail, text-only rendering, POST-only mutations.
+- [x] Read-only dashboard API for projects, cards, search, recent activity,
+  and doctor output.
+- [x] Opt-in remember form behind `--allow-write` with explicit confirmation.
+- [x] Dashboard tests for token auth, Host and Origin checks, CSP, path
+  traversal, body limits, and write gating.
+
+Security gate: no unauthenticated reads or writes, no HTML injection, no path
+escape, and no mutation on GET.
+
+## 0.4.0 - Installer and migrations
+
 - Installer that previews, backs up, and updates a managed block.
 - Schema migration framework.
-- More tests for the new surfaces.
+- More tests for installer backups, managed-block updates, and symlink
+  rejection.
 
-Security gate: no unauthenticated writes, no HTML injection, no path escape,
-and every installer change is backed up and reversible.
+Security gate: every installer change is backed up and reversible.
 
-## 0.4.0 - Import and encryption
+## 0.5.0 - Import and encryption
 
 - Read-only transcript adapters with explicit consent and documented paths.
 - Optional encryption at rest with a user-supplied key.
@@ -49,7 +60,7 @@ and every installer change is backed up and reversible.
 Security gate: imported text is treated as untrusted, encrypted stores never
 write plaintext to disk, and key handling is documented.
 
-## 0.5.0 - Optional sync design
+## 0.6.0 - Optional sync design
 
 - Design-only work for encrypted, user-controlled sync.
 - Allowlist-based Git integration that never runs `git add -A`.

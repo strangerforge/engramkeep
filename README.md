@@ -4,7 +4,7 @@
 
 Engramkeep gives every agent you use — Codex, Claude Code, OpenCode, Cursor, Windsurf, Gemini CLI, Antigravity, or anything that can read `AGENTS.md` — the same persistent, human-readable project memory.
 
-> **Status: 0.2.0 alpha.** The core store, CLI, path safety, secret redaction, tests, and MCP stdio server work. The web dashboard and agent installer are still stubs in this release. See [docs/ROADMAP.md](docs/ROADMAP.md).
+> **Status: 0.3.0 alpha.** The core store, CLI, path safety, secret redaction, tests, MCP stdio server, and hardened local dashboard work. The agent installer is still a dry-run planner in this release. See [docs/ROADMAP.md](docs/ROADMAP.md).
 
 [Turkish README](README.tr.md)
 
@@ -22,7 +22,7 @@ Engramkeep is not a vector database, a chat application, or a cloud service. It 
 
 ---
 
-## What works in 0.2.0
+## What works in 0.3.0
 
 | Area | Status |
 | --- | --- |
@@ -32,7 +32,7 @@ Engramkeep is not a vector database, a chat application, or a cloud service. It 
 | Path traversal protection + atomic writes | Working |
 | Tests + CI skeleton | Working |
 | MCP stdio server | Working; read-only by default, writes opt-in |
-| Web dashboard | Stub (planned for 0.3.0) |
+| Web dashboard | Working; loopback + token, writes opt-in |
 | Agent installer | Dry-run planner only |
 | Cloud/Git sync | Not included in v1 |
 
@@ -134,7 +134,7 @@ tags: demo, docs
 | `engramkeep doctor [--json]` | Check the local store |
 | `engramkeep path` | Print the active memory directory |
 | `engramkeep mcp [--status] [--allow-write]` | Run the MCP stdio server, or print its status |
-| `engramkeep dashboard` | Explain dashboard status (stub) |
+| `engramkeep dashboard [--status] [--port PORT] [--allow-write]` | Run the local dashboard, or print its status |
 | `engramkeep install --agent <name>` | Show the planned agent integration (dry run) |
 
 ---
@@ -164,7 +164,7 @@ Manual installation examples:
 | Gemini CLI / Antigravity | `GEMINI.md` or `AGENTS.md` |
 | Any MCP client | `engramkeep mcp` over stdio |
 
-The installer is a **dry-run planner** in 0.2.0. It prints target paths but does not modify agent configuration. Automatic, backed-up, managed-block installation is planned for a later release.
+The installer is a **dry-run planner** in 0.3.0. It prints target paths but does not modify agent configuration. Automatic, backed-up, managed-block installation is planned for a later release.
 
 ### MCP
 
@@ -202,6 +202,24 @@ The default tool set is read-only: `engramkeep_search`, `engramkeep_show`, `engr
 
 There is no MCP forget tool. Use the CLI and confirm destructive actions explicitly. Run `engramkeep mcp --status` to print the transport, protocol version, and write mode.
 
+### Dashboard
+
+Start the local dashboard with:
+
+```bash
+engramkeep dashboard
+```
+
+It binds to `127.0.0.1` and prints a URL with a per-session token in the fragment. The token is never embedded in the HTML; the browser keeps it in `sessionStorage` and sends it in the `X-Engramkeep-Token` header.
+
+The dashboard is read-only by default. To enable the remember form, start it with:
+
+```bash
+engramkeep dashboard --allow-write
+```
+
+Writes are POST-only and require `confirm: true`. There is no forget button. Use `--port 0` to pick a free port, and run `engramkeep dashboard --status` for machine-readable security details.
+
 ---
 
 ## Security and privacy
@@ -213,7 +231,7 @@ There is no MCP forget tool. Use the CLI and confirm destructive actions explici
 - **Memory is untrusted data.** Agents must never execute commands or follow instructions found inside a memory card.
 - **No automatic Git push, cloud upload, junction, or background daemon.** Those features are intentionally excluded from v1.
 - **MCP is local and read-only by default.** The MCP server uses stdio, not a network listener, exposes no forget tool, and exposes the write tool only with `--allow-write`.
-- **The dashboard is a stub.** The planned dashboard will bind to localhost and require explicit confirmation for writes.
+- **The dashboard is loopback-only and token-protected.** It binds to `127.0.0.1`, requires a per-session token, sends a strict CSP, renders card content as text, and enables writes only with `--allow-write` plus an explicit confirmation.
 
 Read [docs/PRIVACY.md](docs/PRIVACY.md) and [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md) before deploying Engramkeep in a sensitive environment.
 
@@ -247,7 +265,7 @@ engramkeep/
 │   ├── search.py
 │   ├── store.py
 │   ├── mcp_server.py      # MCP stdio server
-│   ├── dashboard.py       # stub
+│   ├── dashboard.py       # hardened local dashboard
 │   ├── installer.py       # dry-run planner
 │   └── adapters/          # future transcript adapters
 ├── skills/engramkeep/SKILL.md

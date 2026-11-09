@@ -141,8 +141,36 @@ def test_mcp_command_serves_with_resolved_home(
 
 
 def test_dashboard_status(cli_home: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    assert main(["dashboard"]) == 0
-    assert "not implemented" in capsys.readouterr().out
+    assert main(["dashboard", "--status"]) == 0
+    output = capsys.readouterr().out
+    assert "Dashboard: available" in output
+    assert "Bind: 127.0.0.1" in output
+    assert "Auth: per-session token" in output
+    assert "--allow-write" in output
+    assert "CSP: strict" in output
+
+
+def test_dashboard_command_serves_with_resolved_home(
+    cli_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls: dict[str, object] = {}
+
+    def fake_serve(
+        home: Path,
+        *,
+        port: int = 8765,
+        allow_write: bool = False,
+    ) -> int:
+        calls["home"] = home
+        calls["port"] = port
+        calls["allow_write"] = allow_write
+        return 0
+
+    monkeypatch.setattr("engramkeep.dashboard.serve", fake_serve)
+    assert main(["dashboard", "--port", "9000", "--allow-write"]) == 0
+    assert calls["home"] == cli_home.resolve()
+    assert calls["port"] == 9000
+    assert calls["allow_write"] is True
 
 
 def test_project_traversal_is_rejected(cli_home: Path, capsys: pytest.CaptureFixture[str]) -> None:
@@ -161,4 +189,4 @@ def test_version(capsys: pytest.CaptureFixture[str]) -> None:
     with pytest.raises(SystemExit) as excinfo:
         main(["--version"])
     assert excinfo.value.code == 0
-    assert "0.2.0" in capsys.readouterr().out
+    assert "0.3.0" in capsys.readouterr().out

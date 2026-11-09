@@ -1,7 +1,7 @@
 # Compatibility
 
 Engramkeep is portable by file format, not by automatic installation. The
-repository ships templates that work with common agents; the 0.2.0 installer
+repository ships templates that work with common agents; the 0.3.0 installer
 only prints a plan.
 
 ## Runtime
@@ -63,9 +63,18 @@ TCP listener. Start it with `engramkeep mcp`; print its status with
 
 ## Dashboard
 
-The web dashboard is still a stub in 0.2.0. The planned implementation will
-bind to loopback, require a token, enforce a path jail, and require explicit
-confirmation for writes.
+The local dashboard is available in 0.3.0. It uses:
+
+- a loopback bind to `127.0.0.1`,
+- a per-session token delivered in the URL fragment and sent in the
+  `X-Engramkeep-Token` header,
+- a strict Content-Security-Policy and text-only card rendering,
+- a read-only API by default.
+
+Start it with `engramkeep dashboard`. The remember form requires
+`--allow-write`, and every write is POST-only with `confirm: true`. The
+dashboard sets no cookies and exposes no CORS headers. There is no forget
+button.
 
 ## Known limitations
 
