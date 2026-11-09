@@ -391,20 +391,29 @@ machine-readable security details.
 
 ---
 
-## Why not Mem0, Basic Memory, or a vector database?
+## Comparison with alternatives: Why Engramkeep?
 
-| | Engramkeep | Cloud memory services | Vector DB stacks |
-| --- | --- | --- | --- |
-| Storage | Your files, plain Markdown | Their servers | Local/remote DB |
-| Dependencies | **0** (stdlib) | Account + API | Embeddings + DB |
-| Recall model | Keyword + recency + EN/TR concept expansion | LLM/embeddings | Semantic similarity |
-| Auditability | `git diff`, open in any editor | Limited | Opaque vectors |
-| Agent setup | One command, backed up, reversible | Varies | Custom glue |
-| Safety model | Memory is data, never instructions | Varies | Varies |
-| Best for | Durable project decisions, fix registry | Teams/hosted use | Large corpora |
+Different projects approach agent memory from different angles. Here is how Engramkeep compares to common patterns and alternatives:
 
-Pick Engramkeep when you want small, auditable, portable memory — not a RAG
-pipeline.
+| Dimension | **Engramkeep** | [basic-memory](https://github.com/basicbase/basic-memory) | [memsearch](https://github.com/zilliztech/memsearch) | [Mem0](https://github.com/mem0ai/mem0) | Manual files ([brain.md](https://gist.github.com/) / EverOS) |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Storage format** | Plain Markdown files on local disk | JSON / SQLite via MCP | Vector store (Milvus / Chroma) | Managed cloud or local vector DB | Static prompt / notes files |
+| **Runtime dependencies** | **0** (Python standard library only) | Minimal Node / Python | Embeddings, vector libraries, daemon | API keys or embedding pipeline | None (text editor) |
+| **Search mechanism** | BM25-style lexical + recency + EN/TR stemmer | Basic key/value & entity lookup | Semantic dense vector embeddings | Vector / graph semantic recall | Agent grep or full context stuffing |
+| **Audit & Versioning** | Native `git diff`, open in any editor | Opaque database or schema | Binary vector index | Hosted dashboard or DB rows | Full `git diff` |
+| **Security & Redaction** | Built-in secret scrubber (`[REDACTED]`) & path jail | Application level | None built-in | Cloud provider policy | Manual diligence |
+| **Fix Registry** | Built-in cross-agent troubleshooting catalog | No | No | No | Freeform notes |
+| **Agent Installer** | Single command for 10 agents (`--apply` + backups) | Manual config | Custom integration scripts | Client SDK integration | Manual copy-pasting |
+| **Primary focus** | Durable project memory & actionable fixes | Minimal MCP memory layer | Fuzzy semantic document search | Conversational user profile graphs | Simple single-agent rule prompt |
+
+### Objective differences
+
+- **vs. [basic-memory](https://github.com/basicbase/basic-memory):** `basic-memory` provides a clean, minimal MCP memory service. Engramkeep operates as both an MCP server and a full standalone CLI with zero dependencies, adding bilingual query expansion (EN/TR), a dedicated troubleshooting/fix registry, automated path-jail isolation, secret sanitization, and automated multi-agent configuration injection with backup rollbacks.
+- **vs. [memsearch](https://github.com/zilliztech/memsearch) & Vector DBs:** `memsearch` excels at fuzzy semantic recall across large unstructured corpora using dense vector embeddings. However, vector databases require heavy embedding model runtimes, background services, and introduce non-deterministic retrieval. Engramkeep intentionally trades fuzzy semantic matching for zero dependencies, instant lexical queries, complete offline auditability, and deterministic `git diff` tracking.
+- **vs. [Mem0](https://github.com/mem0ai/mem0):** Mem0 is tailored for dynamic, personalized user conversational memory and multi-tenant cloud applications. Engramkeep is explicitly local-first and project-centric: no cloud accounts, no API tokens sent to third-party endpoints, and every piece of memory remains a human-readable file in your repository.
+- **vs. Manual single-file prompts ([brain.md](https://gist.github.com/) / EverOS-style rule files):** Plain Markdown rule files are portable and transparent. However, as projects grow, single files suffer from token context bloat, accidental API key commits, and conflicting manual edits across multiple AI tools. Engramkeep structures memory into organized topics, strips credentials before writing, provides fast CLI indexing, and keeps configurations synced across 10+ coding agents.
+
+Pick Engramkeep when you want small, auditable, portable memory that lives with your code — not a complex RAG pipeline or hosted cloud service.
 
 ---
 

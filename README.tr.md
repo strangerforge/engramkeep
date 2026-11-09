@@ -387,20 +387,29 @@ okunabilir güvenlik bilgisi için `engramkeep dashboard --status` çalıştır.
 
 ---
 
-## Neden Mem0 / Basic Memory / vektör veritabanı değil?
+## Alternatifler ve Karşılaştırma: Neden Engramkeep?
 
-| | Engramkeep | Bulut hafıza servisleri | Vektör DB yığınları |
-| --- | --- | --- | --- |
-| Depolama | Senin dosyaların, düz Markdown | Onların sunucuları | Yerel/uzak veritabanı |
-| Bağımlılıklar | **0** (stdlib) | Hesap + API | Embedding + DB |
-| Hatırlama modeli | Anahtar kelime + yenilik + EN/TR kavram genişletmesi | LLM/embedding | Anlamsal benzerlik |
-| Denetlenebilirlik | `git diff`, herhangi bir editörde aç | Sınırlı | Opak vektörler |
-| Ajan kurulumu | Tek komut, yedekli, geri alınabilir | Değişir | Özel yapıştırıcı kod |
-| Güvenlik modeli | Hafıza veridir, asla talimat değil | Değişir | Değişir |
-| En uygun | Kalıcı proje kararları, arıza kayıt defteri | Takım/barındırılan kullanım | Büyük korpuslar |
+Farklı projeler yapay zeka ajan hafızasına farklı açılardan yaklaşır. Engramkeep'in yaygın alternatifler ve yaklaşımlar karşısındaki konumu:
 
-Küçük, denetlenebilir ve taşınabilir bir hafıza istiyorsan Engramkeep doğru
-araçtır; bir RAG hattına ihtiyacın varsa değil.
+| Kriter | **Engramkeep** | [basic-memory](https://github.com/basicbase/basic-memory) | [memsearch](https://github.com/zilliztech/memsearch) | [Mem0](https://github.com/mem0ai/mem0) | Düz Dosyalar ([brain.md](https://gist.github.com/) / EverOS) |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Depolama biçimi** | Yerel diskte düz Markdown dosyaları | JSON / SQLite (MCP üzerinden) | Vektör veritabanı (Milvus / Chroma) | Bulut veya yerel vektör DB | Statik kural / not dosyaları |
+| **Çalışma bağımlılığı** | **0** (Sadece Python standart kütüphanesi) | Asgari Node / Python | Embedding modelleri, vektör DB | API anahtarı veya embedding kütüphanesi | Yok (metin editörü) |
+| **Arama mekanizması** | BM25 benzeri leksikal + güncellik + TR/EN kök | Basit anahtar/değer ve varlık sorgusu | Anlamsal yoğun vektör benzerliği | Vektör ve grafik tabanlı anlamsal çağrı | Ajan grep'i veya tüm dosyayı context'e yükleme |
+| **Denetim ve Sürümleme** | Doğrudan `git diff`, her editörle açılır | Veritabanı veya şema | İkili (binary) vektör indeksi | Bulut paneli veya DB satırları | Doğrudan `git diff` |
+| **Güvenlik ve Gizlilik** | Otomatik sır temizleme (`[REDACTED]`) ve yol hapsi | Uygulama seviyesinde | Dahili bir mekanizma yok | Bulut sağlayıcı politikası | Tamamen manuel dikkat |
+| **Hata Kayıt Defteri** | Dahili, çapraz ajan arıza-çözüm kataloğu | Yok | Yok | Yok | Serbest notlar |
+| **Ajan Kurulumu** | 10 ajan için tek komut (`--apply` + yedekleme) | Manuel yapılandırma | Özel entegrasyon betikleri | İstemci SDK entegrasyonu | Manuel kopyala-yapıştır |
+| **Odak noktası** | Kalıcı proje kararları ve aksiyonel çözümler | Asgari MCP hafıza katmanı | Büyük belgelerde bulanık anlamsal arama | Çok kullanıcılı sohbet profil hafızası | Tek ajan için basit kural istemi |
+
+### Teknik ve Objektif Farklar
+
+- **[basic-memory](https://github.com/basicbase/basic-memory) karşısında:** `basic-memory`, asgari ve temiz bir MCP hafıza katmanı sunar. Engramkeep ise hem MCP sunucusu hem de sıfır bağımlılıklı tam teşekküllü bir CLI aracıdır; Türkçe/İngilizce çift dilli kavram genişletmesi, çapraz ajan arıza-çözüm kataloğu (Troubleshooting Fix Registry), otomatik yol hapsi güvenliği, API anahtarı temizleme ve 10 farklı kodlama ajanı için tek komutla kurulum ve güvenli geri alma (rollback) desteği barındırır.
+- **[memsearch](https://github.com/zilliztech/memsearch) ve Vektör Veritabanları karşısında:** `memsearch`, büyük ve yapılandırılmamış metin yığınlarında vektör embedding'leri kullanarak anlamsal benzerlik aramalarında başarılıdır. Ancak vektör altyapıları ağır makine öğrenmesi kütüphaneleri, ek servisler ve opak sonuçlar getirir. Engramkeep, bulanık anlamsal arama yerine sıfır bağımlılık, anlık leksikal sorgulama, tam çevrimdışı denetlenebilirlik ve deterministik `git diff` takibini bilinçli olarak tercih eder.
+- **[Mem0](https://github.com/mem0ai/mem0) karşısında:** Mem0, kullanıcı bazlı dinamik sohbet profilleri ve çok kullanıcılı bulut uygulamaları için optimize edilmiştir. Engramkeep ise tamamen yerel-öncelikli ve proje-odaklıdır: bulut hesabı gerektirmez, harici sunuculara veri aktarmaz ve her hafıza kartı reponuzda insan tarafından okunabilir düz bir dosya olarak kalır.
+- **Düz Dosya ve Talimatlar ([brain.md](https://gist.github.com/) / EverOS benzeri kural dosyaları) karşısında:** Tek bir Markdown dosyasında kural tutmak basit ve taşınabilirdir. Ancak proje büyüdükçe bu dosyalar token context'ini şişirir, kazara repoya API anahtarı sızmasına yol açabilir ve birden fazla AI aracı arasında senkronizasyon çakışmaları yaratır. Engramkeep hafızayı modüler konulara ayırır, yazma öncesi sırları temizler, hızlı CLI indeksleme sunar ve 10'dan fazla ajan yapılandırmasını otomatik olarak güncel tutar.
+
+Küçük, denetlenebilir ve taşınabilir bir hafıza istiyorsanız Engramkeep doğru araçtır; ağır bir RAG hattına ihtiyacınız varsa değil.
 
 ---
 
