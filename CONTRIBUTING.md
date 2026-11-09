@@ -28,6 +28,7 @@ python -m pytest
 python scripts/check_repo_hygiene.py
 ruff check .
 ruff format --check .
+mypy src
 ```
 
 If `ruff` is not installed, install the `dev` extra first.
@@ -86,6 +87,7 @@ Explain why the case matters and what behavior is now guaranteed.
 - [ ] Tests added or updated.
 - [ ] `python -m pytest` passes.
 - [ ] `ruff check .` passes.
+- [ ] `mypy src` passes.
 - [ ] `python scripts/check_repo_hygiene.py` passes.
 - [ ] No secrets, personal data, or real project names.
 - [ ] Security impact considered.

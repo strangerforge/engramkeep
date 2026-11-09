@@ -25,3 +25,7 @@ class CardParseError(EngramkeepError):
 
 class StoreError(EngramkeepError):
     """Raised when a store operation cannot be completed."""
+
+
+class InstallerError(EngramkeepError):
+    """Raised when an agent integration cannot be planned or applied."""

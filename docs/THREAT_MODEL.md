@@ -1,7 +1,7 @@
 # Threat model
 
 This document describes the security assumptions and known limitations of
-Engramkeep 0.3.0. It is intentionally conservative.
+Engramkeep 0.5.0. It is intentionally conservative.
 
 ## Assets
 
@@ -20,12 +20,12 @@ Engramkeep 0.3.0. It is intentionally conservative.
    privileges. A local attacker or malware with the same privileges is outside
    the model.
 4. **MCP client and browser -> store.** The MCP stdio server and the
-   loopback dashboard both exist in 0.3.0. MCP is read-only by default; the
+   loopback dashboard both exist in 0.5.0. MCP is read-only by default; the
    dashboard is read-only by default and requires a per-session token.
 
 ## Threats and mitigations
 
-| Threat | Mitigation in 0.3.0 | Residual risk |
+| Threat | Mitigation in 0.5.0 | Residual risk |
 | --- | --- | --- |
 | Path traversal through a project name | `normalize_project_id()` rejects separators, drive letters, control characters, and traversal; `safe_join()` proves containment | A bug in a future caller could bypass the helper |
 | Symlink escape | `safe_join()` resolves symlinks; card scanning rejects symlinks; `append_text()` rejects symlinks | Junction behavior on some Windows versions is not exhaustively tested |
@@ -34,7 +34,7 @@ Engramkeep 0.3.0. It is intentionally conservative.
 | Malicious Markdown | Cards are rendered as text by the CLI and the dashboard; the dashboard sends a strict CSP and never uses `innerHTML` | A browser bug or a future renderer could reintroduce HTML injection |
 | Local attacker or malware | Files are created with private permissions where the OS supports it; there is no external network surface, and the dashboard is loopback-only | Same-user malware can read the files |
 | Destructive action | `forget` requires `--yes`; cards move to trash instead of being deleted | Trash retains data until manually removed |
-| Unsafe installer | Installer is a dry-run planner; it does not write | A user can still copy files incorrectly |
+| Unsafe installer | Dry-run by default; `--apply` edits only inside `<!-- engramkeep:begin/end -->` managed blocks, refuses symlinks and unreadable JSON, and creates timestamped backups plus `manifest.json` | A user who deletes the backup directory loses the automatic snapshot |
 | Supply-chain dependency | Zero runtime dependencies; dev dependencies are pinned by range and monitored by Dependabot | Build tooling is still a dependency |
 | Denial of service via huge input | Decision text is capped at 4000 characters; path components are bounded | Very large hand-written files are not size-limited |
 | Malformed card crashes a command | Parse errors are reported; `doctor` surfaces them | A malformed card is skipped by search/list |
@@ -92,13 +92,13 @@ client can ignore the instruction to treat card text as data.
 Residual risk: the token is only as safe as the browser session, and a local
 process running as the same user can still read the store directly.
 
-### Installer (0.4.0)
+### Installer (implemented in 0.5.0)
 
-- preview changes by default.
-- back up every file before modification.
-- update a marked managed block; never overwrite unrelated content.
-- reject symlinked targets.
-- do not create junctions, services, scheduled tasks, or auto-start entries.
+- [x] preview changes by default.
+- [x] back up every file before modification and record changes in `manifest.json`.
+- [x] update a marked managed block; never overwrite unrelated content.
+- [x] reject symlinked targets and unreadable JSON configs.
+- [x] do not create junctions, services, scheduled tasks, or auto-start entries.
 
 ## Reporting
 

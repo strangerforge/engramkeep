@@ -266,6 +266,9 @@ class DashboardHandler(BaseHTTPRequestHandler):
             if path == "/api/search":
                 self._send_search(query)
                 return
+            if path == "/api/fixes":
+                self._send_fixes(query)
+                return
             if path == "/api/recent":
                 limit = _int_parameter(query, "limit", DEFAULT_LIMIT)
                 self._send_json(HTTPStatus.OK, {"entries": self.server.store.recent(limit)})
@@ -340,6 +343,21 @@ class DashboardHandler(BaseHTTPRequestHandler):
         self._send_json(
             HTTPStatus.OK,
             {"hits": [hit.to_dict() for hit in hits], "errors": list(scan.errors)},
+        )
+
+    def _send_fixes(self, query: dict[str, list[str]]) -> None:
+        text = _first(query, "q")
+        if text is not None and len(text) > MAX_QUERY_CHARS:
+            self._send_json(
+                HTTPStatus.BAD_REQUEST,
+                {"error": "query parameter 'q' is too long"},
+            )
+            return
+        limit = _int_parameter(query, "limit", DEFAULT_LIMIT)
+        hits = self.server.store.search_fixes(text or None, limit=limit)
+        self._send_json(
+            HTTPStatus.OK,
+            {"fixes": [hit.to_dict() for hit in hits]},
         )
 
     def _body_length(self) -> int | None:
@@ -659,6 +677,15 @@ INDEX_HTML = """<!doctype html>
       <h2 id="recent-heading">Recent activity</h2>
       <ul id="recent-list" class="results"></ul>
     </section>
+    <section aria-labelledby="fixes-heading">
+      <h2 id="fixes-heading">Troubleshooting fixes</h2>
+      <form id="fixes-form">
+        <label for="fixes-query">Filter fixes (optional)</label>
+        <input id="fixes-query" name="q" type="search" maxlength="2000" autocomplete="off">
+        <button type="submit">Filter</button>
+      </form>
+      <ul id="fixes-list" class="results"></ul>
+    </section>
     <section aria-labelledby="doctor-heading">
       <h2 id="doctor-heading">Doctor</h2>
       <pre id="doctor-view" class="pre"></pre>
@@ -836,6 +863,23 @@ APP_JS = """(() => {
     }
   }
 
+  function renderFixes(fixes) {
+    const list = document.getElementById("fixes-list");
+    clear(list);
+    if (!fixes.length) {
+      list.appendChild(text("li", "No fixes recorded yet.", "muted"));
+      return;
+    }
+    for (const hit of fixes) {
+      const item = document.createElement("li");
+      item.appendChild(text("strong", `${hit.project} (${hit.date})`));
+      item.appendChild(text("span", ` ${hit.workspace || "General"}`, "muted"));
+      item.appendChild(text("p", `problem: ${hit.error}`, "snippet"));
+      item.appendChild(text("p", `fix: ${hit.fix}`, "snippet"));
+      list.appendChild(item);
+    }
+  }
+
   function renderDoctor(report) {
     document.getElementById("doctor-view").textContent = JSON.stringify(report, null, 2);
   }
@@ -855,6 +899,15 @@ APP_JS = """(() => {
     renderRecent(data.entries);
   }
 
+  async function loadFixes(query = "") {
+    const params = new URLSearchParams({ limit: "10" });
+    if (query) {
+      params.set("q", query);
+    }
+    const data = await api(`/api/fixes?${params.toString()}`);
+    renderFixes(data.fixes);
+  }
+
   async function loadDoctor() {
     const data = await api("/api/doctor");
     renderDoctor(data.report);
@@ -866,7 +919,7 @@ APP_JS = """(() => {
       const health = await api("/api/health");
       state.writes = Boolean(health.writes);
       document.getElementById("remember-section").hidden = !state.writes;
-      await Promise.all([loadProjects(), loadRecent(), loadDoctor()]);
+      await Promise.all([loadProjects(), loadRecent(), loadFixes(), loadDoctor()]);
       setStatus(state.writes ? "Ready. Writes are enabled." : "Ready. Read-only mode.");
     } catch (error) {
       setStatus(error.message, true);
@@ -890,6 +943,18 @@ APP_JS = """(() => {
       const data = await api(`/api/search?${params.toString()}`);
       renderSearch(data.hits);
       setStatus(`${data.hits.length} result(s).`);
+    } catch (error) {
+      setStatus(error.message, true);
+    }
+  });
+
+  document.getElementById("fixes-form").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const query = document.getElementById("fixes-query").value.trim();
+    try {
+      setStatus("Loading fixes...");
+      await loadFixes(query);
+      setStatus("Ready.");
     } catch (error) {
       setStatus(error.message, true);
     }

@@ -131,6 +131,11 @@ def test_api_requires_the_session_token(store: Store) -> None:
 
 def test_api_reads(store: Store) -> None:
     store.remember("demo", "Use SQLite for local storage", tags=["database"])
+    store.record_fix(
+        "Keystore signature mismatch on release build",
+        "Enable v2 signing in gradle signingConfigs",
+        project="mobile-app",
+    )
 
     with running_dashboard(store.home) as server:
         status, _, body = request(server, "GET", "/api/cards", token=server.token)
@@ -161,6 +166,16 @@ def test_api_reads(store: Store) -> None:
         assert status == 200
         assert len(json_body(body)["hits"]) == 1
 
+        status, _, body = request(server, "GET", "/api/fixes", token=server.token)
+        assert status == 200
+        fixes = json_body(body)["fixes"]
+        assert len(fixes) == 1
+        assert fixes[0]["project"] == "mobile-app"
+
+        status, _, body = request(server, "GET", "/api/fixes?q=mobil", token=server.token)
+        assert status == 200
+        assert json_body(body)["fixes"][0]["project"] == "mobile-app"
+
         status, _, body = request(server, "GET", "/api/recent?limit=5", token=server.token)
         assert status == 200
         assert any("remembered" in line for line in json_body(body)["entries"])
@@ -177,6 +192,8 @@ def test_api_rejects_bad_query_parameters(store: Store) -> None:
             "/api/search?q=",
             "/api/search?q=x&limit=0",
             "/api/search?q=x&limit=abc",
+            "/api/fixes?limit=0",
+            "/api/fixes?limit=999",
             "/api/recent?limit=999",
         ):
             status, _, body = request(server, "GET", path, token=server.token)

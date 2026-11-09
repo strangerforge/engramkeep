@@ -1,8 +1,8 @@
 # Compatibility
 
-Engramkeep is portable by file format, not by automatic installation. The
-repository ships templates that work with common agents; the 0.3.0 installer
-only prints a plan.
+Engramkeep is portable by file format. The 0.5.0 installer can write the
+managed block for you, but every agent file it touches is backed up and
+reversible; manual template copying still works.
 
 ## Runtime
 
@@ -21,20 +21,37 @@ versions above.
 
 ## Agents
 
-| Agent | Portable file | Typical target | Notes |
+| Agent | Installer id | Portable file | Typical target |
 | --- | --- | --- | --- |
-| OpenCode | `AGENTS.md`, `SKILL.md` | `~/.config/opencode/AGENTS.md`, `~/.config/opencode/skills/engramkeep/SKILL.md` | Copy both templates. |
-| Claude Code | `CLAUDE.md`, `SKILL.md` | `~/.claude/CLAUDE.md`, `~/.claude/skills/engramkeep/SKILL.md` | Append the managed block; do not overwrite user content. |
-| OpenAI Codex | `AGENTS.md` | `~/.codex/AGENTS.md` or project `AGENTS.md` | Project-level instructions are usually preferable. |
-| Cursor | `.mdc` rule, `AGENTS.md` | `.cursor/rules/engramkeep.mdc` | Copy from `templates/rules/cursor.mdc`. |
-| Windsurf | Markdown rule, `AGENTS.md` | `.windsurf/rules/engramkeep.md` | Copy from `templates/rules/windsurf.md`. |
-| Gemini CLI | `GEMINI.md`, `AGENTS.md` | `~/.gemini/GEMINI.md` or project `AGENTS.md` | Prefer `AGENTS.md` when supported. |
-| Antigravity | `GEMINI.md`, `AGENTS.md` | `~/.gemini/GEMINI.md` or project `AGENTS.md` | Verify your installed version's behavior. |
-| Any MCP client | MCP stdio | `engramkeep mcp` | Read-only tools by default; `--allow-write` enables the remember tool. |
+| OpenCode | `opencode` | `AGENTS.md`, `SKILL.md` | `~/.config/opencode/AGENTS.md`, skills directory |
+| Claude Code | `claude-code` | `CLAUDE.md`, `SKILL.md` | `~/.claude/CLAUDE.md`, skills directory |
+| OpenAI Codex | `codex` | `AGENTS.md` | `~/.codex/AGENTS.md` or project `AGENTS.md` |
+| Cursor | `cursor` | `.mdc` rule | `.cursor/rules/engramkeep.mdc` |
+| Windsurf | `windsurf` | Markdown rule | `.windsurf/rules/engramkeep.md` |
+| Gemini CLI | `gemini-cli` | `GEMINI.md` | `~/.gemini/GEMINI.md` |
+| Antigravity | `antigravity` | `GEMINI.md`, `AGENTS.md` | `~/.gemini/GEMINI.md` |
+| GitHub Copilot | `copilot` | repository instructions | `.github/copilot-instructions.md` |
+| Cline | `cline` | `.clinerules` | project root |
+| Roo Code | `roo` | `.roorules` | project root |
+| Any MCP client | n/a | MCP stdio | `engramkeep mcp` |
 
 These paths are conventions, not guarantees. Agent vendors can change them.
-The dry-run planner in `engramkeep install --agent <name>` prints the current
-assumptions without touching the filesystem.
+`engramkeep install --list` prints the current assumptions, and a dry run shows
+every target before anything is written.
+
+## Installer behavior
+
+- Dry run by default; `--apply` writes and `--uninstall` removes.
+- Managed blocks are delimited by `<!-- engramkeep:begin -->` and
+  `<!-- engramkeep:end -->`; re-running updates only that block.
+- Existing files are backed up with a timestamp and recorded in
+  `manifest.json` under `<home>/backups/installer/`.
+- `--scope auto` picks the global target when the agent documents one,
+  otherwise the project target. `--scope project --project-dir PATH` forces a
+  project scope.
+- `--mcp` also registers the MCP server. It is supported for Claude Code,
+  OpenCode, and Cursor; other agents are reported as skipped.
+- Files that cannot be parsed safely are never edited.
 
 ## What "portable" means
 
@@ -45,7 +62,8 @@ assumptions without touching the filesystem.
 
 ## MCP
 
-The MCP stdio server is available in 0.2.0. It uses:
+The MCP stdio server is available since 0.2.0 and gained the fixes tools in 0.4.0.
+It uses:
 
 - stdio transport,
 - newline-delimited JSON-RPC 2.0 framing,
@@ -53,9 +71,10 @@ The MCP stdio server is available in 0.2.0. It uses:
 - read-only tools by default.
 
 Read-only tools are `engramkeep_search`, `engramkeep_show`,
-`engramkeep_list`, `engramkeep_recent`, and `engramkeep_doctor`. The
-`engramkeep_remember` write tool is exposed only when the server is started
-with `--allow-write`. There is no MCP forget tool.
+`engramkeep_list`, `engramkeep_recent`, `engramkeep_doctor`, and
+`engramkeep_fixes`. The `engramkeep_remember` and `engramkeep_record_fix`
+write tools are exposed only when the server is started with `--allow-write`.
+There is no MCP forget tool.
 
 The server does not use the legacy `Content-Length` framing and does not open a
 TCP listener. Start it with `engramkeep mcp`; print its status with
@@ -63,7 +82,7 @@ TCP listener. Start it with `engramkeep mcp`; print its status with
 
 ## Dashboard
 
-The local dashboard is available in 0.3.0. It uses:
+The local dashboard is available since 0.3.0. It uses:
 
 - a loopback bind to `127.0.0.1`,
 - a per-session token delivered in the URL fragment and sent in the

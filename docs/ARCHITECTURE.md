@@ -28,7 +28,7 @@ keyword search. The security properties come from what is *not* in the core.
 | `store.py` | Store lifecycle, cards, index, activity log, audit trail, trash, doctor, troubleshooting registry. |
 | `troubleshoot.py` | Troubleshooting registry: parse/render `TROUBLESHOOTING.md`, scoring, untrusted-data handling. |
 | `cli.py` | argparse command-line interface. |
-| `installer.py` | Dry-run agent integration planner. |
+| `installer.py` | Backed-up, managed-block agent integration installer (dry-run by default). |
 | `mcp_server.py` | MCP stdio server: newline-delimited JSON-RPC, read-only tools, opt-in write tools. |
 | `dashboard.py` | Hardened loopback dashboard: token auth, strict CSP, path jail, read-only API, opt-in POST remember. |
 | `adapters/` | Reserved for future read-only transcript adapters. |
@@ -80,7 +80,7 @@ instead of guessing.
 }
 ```
 
-A newer schema is rejected. An older schema is rejected in 0.3.0 because no
+A newer schema is rejected. An older schema is rejected in 0.5.0 because no
 migration is implemented yet.
 
 ### Card format
@@ -129,9 +129,9 @@ metadata. Decision text is not copied into the audit log. Example:
 - The store, CLI, and MCP modules import no networking or subprocess modules.
   Only `dashboard.py` binds a loopback listener.
 - Destructive commands require `--yes`.
-- The installer never writes files in 0.3.0.
+- The installer is dry-run by default; `--apply` edits only inside managed blocks, rejects symlinks, and writes a timestamped backup plus `manifest.json`.
 - MCP uses stdio only, is read-only by default, and has no forget tool.
-- The MCP write tool exists only when the server is started with
+- The MCP write tools exist only when the server is started with
   `--allow-write`.
 - The dashboard binds to `127.0.0.1`, requires a per-session token, and
   validates the Host header and any Origin on writes.
@@ -142,15 +142,16 @@ metadata. Decision text is not copied into the audit log. Example:
 
 Future features must preserve the invariants above:
 
-- **MCP server (0.2.0, implemented):** stdio, newline-delimited JSON,
+- **MCP server (0.2.0, updated in 0.4.0):** stdio, newline-delimited JSON,
   protocol version 2025-11-25, no network listener, read-only by default, and
-  an explicit `--allow-write` opt-in for the remember tool.
-- **Dashboard (0.3.0, implemented):** bind to `127.0.0.1`, require a
-  per-session token, enforce a path jail, use strict CSP, render card content
-  as text, and keep mutations POST-only behind `--allow-write`.
-- **Installer (0.4.0):** preview by default, back up before changing agent
-  configuration, update a managed block, never overwrite unrelated content.
-- **Adapters (0.5.0):** explicit consent, documented source paths, read-only,
+  an explicit `--allow-write` opt-in for the remember and record_fix tools.
+- **Dashboard (0.3.0, updated in 0.5.0):** bind to `127.0.0.1`, require a
+  per-session token, enforce a path jail, use strict CSP, render card and fix
+  content as text, and keep mutations POST-only behind `--allow-write`.
+- **Installer (0.5.0, implemented):** preview by default, back up before
+  changing agent configuration, update a managed block, never overwrite
+  unrelated content.
+- **Adapters (0.6.0):** explicit consent, documented source paths, read-only,
   no upload.
 
 ## Testing strategy

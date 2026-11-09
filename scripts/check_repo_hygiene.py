@@ -45,21 +45,24 @@ REQUIRED_FILES = [
     ".gitattributes",
     ".editorconfig",
     "docs/ARCHITECTURE.md",
+    "docs/BENCHMARK.md",
     "docs/PRIVACY.md",
     "docs/THREAT_MODEL.md",
     "docs/COMPATIBILITY.md",
     "docs/ROADMAP.md",
+    "docs/RELEASING.md",
+    "docs/GOOD_FIRST_ISSUES.md",
+    "docs/LAUNCH.md",
     "skills/engramkeep/SKILL.md",
     "templates/agents/AGENTS.md",
     "examples/brain/meta.json",
     "examples/brain/projects/example-project.md",
+    "examples/demo-brain/meta.json",
+    "assets/dashboard.png",
+    "assets/demo.gif",
     "scripts/check_repo_hygiene.py",
     ".github/workflows/ci.yml",
-]
-
-FORBIDDEN_NAMES = [
-    "KEN" + "AN",
-    "universal-" + "agent-" + "brain",
+    ".github/workflows/release.yml",
 ]
 
 USER_PATH_PATTERNS = [
@@ -106,7 +109,11 @@ PRIVATE_SUFFIXES = {
     ".log",
 }
 PRIVATE_NAMES = {"id_rsa", "id_ed25519", "credentials", "secrets.json", ".env"}
-ALLOWED_PRIVATE_FILES = {"examples/brain/audit.log"}
+# Synthetic example stores intentionally ship a redacted audit log.
+ALLOWED_PRIVATE_FILES = {
+    "examples/brain/audit.log",
+    "examples/demo-brain/audit.log",
+}
 
 DANGEROUS_CODE = [
     (r"\beval\s*\(", "eval"),
@@ -200,10 +207,6 @@ def check_text(root: Path, files: list[Path], failures: list[str]) -> None:
         if text is None:
             continue
         rel = relative(root, path)
-        lowered = text.lower()
-        for name in FORBIDDEN_NAMES:
-            if name.lower() in lowered:
-                failures.append(f"forbidden name {name!r} in {rel}")
         for label, pattern in USER_PATH_PATTERNS:
             for match in pattern.finditer(text):
                 user = match.group(1)

@@ -38,6 +38,7 @@ engramkeep doctor [--json]
 engramkeep path
 engramkeep mcp [--status] [--allow-write]
 engramkeep dashboard [--status] [--port PORT] [--allow-write]
+engramkeep install [--list] [--agent NAME] [--apply] [--uninstall] [--mcp]
 ```
 
 The memory home is selected by `--home`, then `ENGRAMKEEP_HOME`, then a
@@ -108,6 +109,7 @@ no forget button.
 ## Compatibility
 
 The repository ships `AGENTS.md`, this `SKILL.md`, and per-agent rule
-templates. The installer is a dry-run planner in 0.4.0. The MCP stdio server
-is available with `engramkeep mcp`, and the local dashboard is available with
+templates. `engramkeep install --agent <name> --apply` writes a backed-up,
+managed block; `--uninstall` reverses it. The MCP stdio server is available
+with `engramkeep mcp`, and the local dashboard is available with
 `engramkeep dashboard`.

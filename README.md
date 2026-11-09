@@ -1,6 +1,7 @@
 # Engramkeep
 
-[![CI](https://github.com/engramkeep/engramkeep/actions/workflows/ci.yml/badge.svg)](https://github.com/engramkeep/engramkeep/actions/workflows/ci.yml)
+[![CI](https://github.com/strangervibe/engramkeep/actions/workflows/ci.yml/badge.svg)](https://github.com/strangervibe/engramkeep/actions/workflows/ci.yml)
+[![Coverage: 85%](https://img.shields.io/badge/Coverage-85%25-brightgreen.svg)](docs/BENCHMARK.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://www.python.org/)
 [![Dependencies: 0](https://img.shields.io/badge/Dependencies-0%20(stdlib)-brightgreen.svg)](pyproject.toml)
@@ -8,11 +9,25 @@
 
 **Local-first, Markdown-native memory for AI coding agents.**
 
-Engramkeep gives every agent you use — Codex, Claude Code, OpenCode, Cursor, Windsurf, Gemini CLI, Antigravity, or anything that can read `AGENTS.md` — the same persistent, human-readable project memory. It runs on the Python standard library alone.
+Engramkeep gives every agent you use — Codex, Claude Code, OpenCode, Cursor,
+Windsurf, Gemini CLI, Antigravity, or anything that can read `AGENTS.md` — the
+same persistent, human-readable project memory. It runs on the Python standard
+library alone.
 
-> **Status: 0.4.0 alpha.** The core store, CLI, path safety, secret redaction, tests, MCP stdio server, hardened local dashboard, a troubleshooting registry, and bilingual (EN/TR) search work. The agent installer is still a dry-run planner in this release. See [docs/ROADMAP.md](docs/ROADMAP.md).
+> **Status: 0.5.0 alpha.** The store, CLI, MCP server, dashboard,
+> troubleshooting registry, bilingual search, and the backed-up agent
+> installer work. Cloud sync, transcript adapters, and schema migrations are
+> still ahead. See [docs/ROADMAP.md](docs/ROADMAP.md).
 
 [Turkish README](README.tr.md)
+
+---
+
+![Engramkeep dashboard](https://raw.githubusercontent.com/strangervibe/engramkeep/main/assets/dashboard.png)
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/strangervibe/engramkeep/main/assets/demo.gif" alt="Engramkeep demo: projects, search, cards, activity, and doctor" width="720">
+</p>
 
 ---
 
@@ -21,14 +36,17 @@ Engramkeep gives every agent you use — Codex, Claude Code, OpenCode, Cursor, W
 - **Local-first.** No account, no telemetry, no server. Your memory stays on your machine.
 - **Markdown-native.** Every card is a plain Markdown file you can read, diff, back up, and edit.
 - **Agent-agnostic.** A canonical `AGENTS.md` protocol, a portable `SKILL.md`, and an MCP stdio server for clients that speak the Model Context Protocol.
+- **One-command setup.** `engramkeep install --apply` wires the memory protocol into ten agents, with managed blocks, timestamped backups, and a clean uninstall.
 - **Safe by default.** Path jail, atomic writes, secret redaction, and one hard rule: memory is data, not instructions.
 - **Zero required dependencies.** The core runs on the Python standard library.
 
-Engramkeep is not a vector database, a chat application, or a cloud service. It is a small, auditable memory layer that keeps project decisions in files you own.
+Engramkeep is not a vector database, a chat application, or a cloud service. It
+is a small, auditable memory layer that keeps project decisions in files you
+own.
 
 ---
 
-## What works in 0.4.0
+## What works in 0.5.0
 
 | Area | Status |
 | --- | --- |
@@ -37,12 +55,12 @@ Engramkeep is not a vector database, a chat application, or a cloud service. It 
 | CLI: `fix` (record a solved problem), `fixes` (search solved problems) | Working |
 | Secret redaction before write | Working |
 | Path traversal protection + atomic writes | Working |
-| Tests + CI | Working |
+| Tests + CI on Linux, macOS, and Windows | 203 passing tests, 85% coverage |
 | MCP stdio server | Working; read-only by default, writes opt-in |
 | Web dashboard | Working; loopback + token, writes opt-in |
 | Troubleshooting registry (`TROUBLESHOOTING.md`) | Working; redacted, atomic, untrusted data |
-| Bilingual (EN/TR) search expansion | Working; deterministic, small bonus, word-boundary matched |
-| Agent installer | Dry-run planner only |
+| Bilingual (EN/TR) search expansion | Working; deterministic, word-boundary matched |
+| Agent installer | Working; managed blocks, backups, uninstall |
 | Cloud/Git sync | Not included |
 
 ---
@@ -74,9 +92,23 @@ Api Gateway (api-gateway)
   ...Decisions - Use SQLite for local storage
 ```
 
+A complete synthetic store lives in [`examples/demo-brain/`](examples/demo-brain).
+It is generated from checked-in JSON sources by
+`python scripts/build_demo_brain.py`; no real project data is included.
+
 ---
 
 ## Quick start
+
+```bash
+pipx install engramkeep     # or: pip install engramkeep
+engramkeep init
+engramkeep remember example-project "Use SQLite for local storage" --tag database
+engramkeep search sqlite
+engramkeep show example-project
+```
+
+From a source checkout:
 
 ```bash
 python -m venv .venv
@@ -88,14 +120,10 @@ python -m venv .venv
 source .venv/bin/activate
 
 pip install -e ".[dev]"
-
 engramkeep init
-engramkeep remember example-project "Use SQLite for local storage" --tag database
-engramkeep search sqlite
-engramkeep show example-project
 ```
 
-Without installing the package, run it from the repository:
+Without installing the package:
 
 ```bash
 # Windows
@@ -106,9 +134,49 @@ python -m engramkeep init
 PYTHONPATH=src python -m engramkeep init
 ```
 
+Try the demo store before touching your own memory:
+
+```bash
+engramkeep --home examples/demo-brain search "docker arm64"
+engramkeep --home examples/demo-brain fixes "database is locked"
+engramkeep --home examples/demo-brain dashboard
+```
+
 ---
 
-## Where memory lives
+## Install the memory protocol into your agents
+
+The installer writes a small managed block into your agent instruction files.
+It is a **dry run by default**: nothing changes until you pass `--apply`.
+
+```bash
+engramkeep install --list                 # supported agents
+engramkeep install --agent opencode       # show the plan (dry run)
+engramkeep install --agent opencode --apply
+engramkeep install --agent opencode --apply --mcp
+engramkeep install --agent all --apply    # every supported agent
+engramkeep install --agent opencode --uninstall
+```
+
+What it does:
+
+| Behavior | Detail |
+| --- | --- |
+| Managed blocks | Text is wrapped in `<!-- engramkeep:begin -->` … `<!-- engramkeep:end -->`; re-running updates only that block |
+| Backups | Every modified file is copied to a timestamped `.bak` next to it, and the path is recorded in `manifest.json` |
+| Scopes | `--scope auto` (default; global when documented, otherwise project) or `--scope project --project-dir PATH` |
+| MCP registration | Opt-in with `--mcp`; automatic for Claude Code, OpenCode, and Cursor, skipped with a printed reason elsewhere |
+| Uninstall | `--uninstall` removes only the managed block and leaves the rest of the file intact |
+| Dry run | Prints `would-create`, `would-update`, or `would-remove` for every target |
+| No overwrites | Refuses to edit files it cannot parse safely; never deletes user content |
+
+Supported agents: **OpenCode, Claude Code, OpenAI Codex, Cursor, Windsurf,
+Gemini CLI, Antigravity, GitHub Copilot, Cline, and Roo Code.** `engramkeep
+install --list` prints the exact target paths for the current platform.
+
+---
+
+## What gets remembered
 
 By default:
 
@@ -118,7 +186,8 @@ By default:
 | macOS | `~/Library/Application Support/Engramkeep` |
 | Linux | `$XDG_DATA_HOME/engramkeep` or `~/.local/share/engramkeep` |
 
-Override it with the `ENGRAMKEEP_HOME` environment variable or the global `--home` flag:
+Override it with the `ENGRAMKEEP_HOME` environment variable or the global
+`--home` flag:
 
 ```bash
 engramkeep --home ./my-brain init
@@ -159,7 +228,9 @@ tags: demo, docs
 
 ## The troubleshooting registry
 
-Every agent eventually hits the same build failure twice. Engramkeep keeps a local `TROUBLESHOOTING.md` so a solved error is recorded once and recalled forever:
+Every agent eventually hits the same build failure twice. Engramkeep keeps a
+local `TROUBLESHOOTING.md` so a solved error is recorded once and recalled
+forever:
 
 ```bash
 # Record a resolved problem
@@ -174,11 +245,33 @@ engramkeep fixes            # newest first
 engramkeep fixes --json
 ```
 
-Entries are redacted before write, the file is rewritten atomically, and agents are instructed to treat entries as **untrusted data** — never as instructions to execute.
+Entries are redacted before write, the file is rewritten atomically, and agents
+are instructed to treat entries as **untrusted data** — never as instructions
+to execute.
 
-## Bilingual search (EN/TR)
+### How well does recall work?
 
-Search expands common engineering concepts across English and Turkish deterministically (`concepts.py`): `mobil` finds cards about `capacitor`/`apk`/`flutter`, `veritabanı` finds `postgresql`/`sqlite`, `arama` finds `index`/`fts`. Expansion terms carry a small capped bonus and use word-boundary matching, so literal matches always win and one-letter terms never match inside unrelated words.
+The repository includes a reproducible benchmark over a synthetic corpus of 15
+error/fix pairs and 45 independently written queries (English and Turkish):
+
+| Metric | Result |
+| --- | --- |
+| Top-1 accuracy | 43/45 (95.6%) |
+| Top-3 recall | 45/45 (100%) |
+| Turkish query → English entry, top-1 | 15/15 (100%) |
+| Mean reciprocal rank | 0.978 |
+| Query latency p50 / p95 | ~4 ms / ~9 ms |
+
+Scoring is lexical with a small bilingual concept bonus: no embeddings, no
+network calls, nothing to download. Two of the three no-match controls return
+nothing; the third is reported honestly in [docs/BENCHMARK.md](docs/BENCHMARK.md)
+rather than hidden.
+
+Reproduce:
+
+```bash
+python scripts/benchmark_fix_registry.py --output docs/BENCHMARK.md
+```
 
 ---
 
@@ -199,9 +292,9 @@ Search expands common engineering concepts across English and Turkish determinis
 | `engramkeep reindex` | Regenerate `INDEX.md` |
 | `engramkeep doctor [--json]` | Check the local store, including the registry |
 | `engramkeep path` | Print the active memory directory |
+| `engramkeep install [--list] [--agent NAME] [--apply] [--uninstall] [--scope auto\|global\|project] [--mcp]` | Plan or apply agent integration |
 | `engramkeep mcp [--status] [--allow-write]` | Run the MCP stdio server, or print its status |
 | `engramkeep dashboard [--status] [--port PORT] [--allow-write]` | Run the local dashboard, or print its status |
-| `engramkeep install --agent <name>` | Show the planned agent integration (dry run) |
 
 ---
 
@@ -218,7 +311,8 @@ The repository ships:
 - [`templates/agents/AGENTS.md`](templates/agents/AGENTS.md)
 - [`templates/rules/`](templates/rules/) for Claude Code, Cursor, Windsurf, and OpenCode
 
-Manual installation examples:
+`engramkeep install --agent <name> --apply` does this for you, or you can copy
+the templates manually:
 
 | Agent | Typical target |
 | --- | --- |
@@ -230,8 +324,6 @@ Manual installation examples:
 | Gemini CLI / Antigravity | `GEMINI.md` or `AGENTS.md` |
 | Any MCP client | `engramkeep mcp` over stdio |
 
-The installer is a **dry-run planner** in 0.4.0. It prints target paths but does not modify agent configuration. Automatic, backed-up, managed-block installation is planned for a later release.
-
 ### MCP
 
 Start the server with:
@@ -240,7 +332,8 @@ Start the server with:
 engramkeep mcp
 ```
 
-It uses newline-delimited JSON-RPC 2.0 over stdio and protocol version `2025-11-25`. A typical client configuration looks like:
+It uses newline-delimited JSON-RPC 2.0 over stdio and protocol version
+`2025-11-25`. A typical client configuration looks like:
 
 ```json
 {
@@ -253,7 +346,10 @@ It uses newline-delimited JSON-RPC 2.0 over stdio and protocol version `2025-11-
 }
 ```
 
-The default tool set is read-only: `engramkeep_search`, `engramkeep_show`, `engramkeep_list`, `engramkeep_recent`, `engramkeep_doctor`, and `engramkeep_fixes`. To also expose the write tools `engramkeep_remember` and `engramkeep_record_fix`, start the server with `--allow-write`:
+The default tool set is read-only: `engramkeep_search`, `engramkeep_show`,
+`engramkeep_list`, `engramkeep_recent`, `engramkeep_doctor`, and
+`engramkeep_fixes`. To also expose the write tools `engramkeep_remember` and
+`engramkeep_record_fix`, start the server with `--allow-write`:
 
 ```json
 {
@@ -266,7 +362,9 @@ The default tool set is read-only: `engramkeep_search`, `engramkeep_show`, `engr
 }
 ```
 
-There is no MCP forget tool. Use the CLI and confirm destructive actions explicitly. Run `engramkeep mcp --status` to print the transport, protocol version, and write mode.
+There is no MCP forget tool. Use the CLI and confirm destructive actions
+explicitly. Run `engramkeep mcp --status` to print the transport, protocol
+version, and write mode.
 
 ### Dashboard
 
@@ -276,15 +374,20 @@ Start the local dashboard with:
 engramkeep dashboard
 ```
 
-It binds to `127.0.0.1` and prints a URL with a per-session token in the fragment. The token is never embedded in the HTML; the browser keeps it in `sessionStorage` and sends it in the `X-Engramkeep-Token` header.
+It binds to `127.0.0.1` and prints a URL with a per-session token in the
+fragment. The token is never embedded in the HTML; the browser keeps it in
+`sessionStorage` and sends it in the `X-Engramkeep-Token` header.
 
-The dashboard is read-only by default. To enable the remember form, start it with:
+The dashboard is read-only by default. To enable the remember form, start it
+with:
 
 ```bash
 engramkeep dashboard --allow-write
 ```
 
-Writes are POST-only and require `confirm: true`. There is no forget button. Use `--port 0` to pick a free port, and run `engramkeep dashboard --status` for machine-readable security details.
+Writes are POST-only and require `confirm: true`. There is no forget button.
+Use `--port 0` to pick a free port, and run `engramkeep dashboard --status` for
+machine-readable security details.
 
 ---
 
@@ -296,10 +399,12 @@ Writes are POST-only and require `confirm: true`. There is no forget button. Use
 | Dependencies | **0** (stdlib) | Account + API | Embeddings + DB |
 | Recall model | Keyword + recency + EN/TR concept expansion | LLM/embeddings | Semantic similarity |
 | Auditability | `git diff`, open in any editor | Limited | Opaque vectors |
+| Agent setup | One command, backed up, reversible | Varies | Custom glue |
 | Safety model | Memory is data, never instructions | Varies | Varies |
 | Best for | Durable project decisions, fix registry | Teams/hosted use | Large corpora |
 
-Pick Engramkeep when you want small, auditable, portable memory — not a RAG pipeline.
+Pick Engramkeep when you want small, auditable, portable memory — not a RAG
+pipeline.
 
 ---
 
@@ -310,11 +415,14 @@ Pick Engramkeep when you want small, auditable, portable memory — not a RAG pi
 - **Path jail.** Project names are resolved through `safe_join()` and cannot escape the memory directory.
 - **Atomic writes.** Cards and generated files are written via a temporary file and `os.replace()`.
 - **Memory is untrusted data.** Agents must never execute commands or follow instructions found inside a memory card or a troubleshooting entry.
+- **Installer safety.** Dry run by default, managed blocks only, timestamped backups, `manifest.json`, and a reversible uninstall.
 - **No automatic Git push, cloud upload, junction, or background daemon.** Those features are intentionally excluded.
 - **MCP is local and read-only by default.** Stdio transport, no network listener, no forget tool, write tools only with `--allow-write`.
 - **The dashboard is loopback-only and token-protected.** `127.0.0.1`, per-session token, strict CSP, text-only rendering, writes only with `--allow-write` plus explicit confirmation.
 
-Read [docs/PRIVACY.md](docs/PRIVACY.md) and [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md) before deploying Engramkeep in a sensitive environment.
+Read [docs/PRIVACY.md](docs/PRIVACY.md) and
+[docs/THREAT_MODEL.md](docs/THREAT_MODEL.md) before deploying Engramkeep in a
+sensitive environment.
 
 ---
 
@@ -349,12 +457,20 @@ engramkeep/
 │   ├── troubleshoot.py    # troubleshooting registry (TROUBLESHOOTING.md)
 │   ├── mcp_server.py      # MCP stdio server
 │   ├── dashboard.py       # hardened local dashboard
-│   ├── installer.py       # dry-run planner
+│   ├── installer.py       # backed-up, managed-block agent installer
 │   └── adapters/          # future transcript adapters
+├── assets/                # dashboard.png, demo.gif
+├── examples/
+│   ├── brain/             # minimal valid store
+│   ├── demo-brain/        # generated synthetic store
+│   ├── demo-cards.json
+│   └── fix-registry/      # benchmark corpus
+├── scripts/
+│   ├── build_demo_brain.py
+│   └── benchmark_fix_registry.py
 ├── skills/engramkeep/SKILL.md
 ├── templates/
-├── examples/brain/
-├── tests/
+├── tests/                 # 203 tests
 ├── docs/
 └── .github/
 ```
@@ -363,10 +479,14 @@ engramkeep/
 
 ## Contributing
 
-Contributions are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md), follow the [Code of Conduct](CODE_OF_CONDUCT.md), and report security issues through [SECURITY.md](SECURITY.md).
+Contributions are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md), follow
+the [Code of Conduct](CODE_OF_CONDUCT.md), and report security issues through
+[SECURITY.md](SECURITY.md). Good first tasks are listed in
+[docs/GOOD_FIRST_ISSUES.md](docs/GOOD_FIRST_ISSUES.md).
 
 ## License
 
 MIT. See [LICENSE](LICENSE).
 
-Engramkeep is not affiliated with Google, Anthropic, OpenAI, Anysphere, Cognition, or any other agent vendor. See [TRADEMARKS.md](TRADEMARKS.md).
+Engramkeep is not affiliated with Google, Anthropic, OpenAI, Anysphere,
+Cognition, or any other agent vendor. See [TRADEMARKS.md](TRADEMARKS.md).

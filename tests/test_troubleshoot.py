@@ -10,8 +10,10 @@ from engramkeep.errors import StoreError
 from engramkeep.store import Store
 from engramkeep.troubleshoot import (
     TROUBLESHOOTING_NAME,
+    TroubleEntry,
     parse_registry,
     render_registry,
+    score_entry,
     search_entries,
 )
 
@@ -161,6 +163,38 @@ def test_search_entries_limit() -> None:
         for i in range(15)
     ]
     assert len(search_entries(entries, "same", limit=10)) == 10
+
+
+def test_score_entry_uses_word_boundaries() -> None:
+    entry = TroubleEntry(
+        project="Signal Dashboard",
+        error="Error: error:0308010C:digital envelope routines::unsupported",
+        fix="Upgrade the bundler.",
+        workspace=None,
+        date="2026-10-13",
+    )
+    # "git" must not match inside "digital".
+    assert score_entry(entry, "git") == (0, [])
+
+
+def test_score_entry_prefers_specific_identifier() -> None:
+    specific = TroubleEntry(
+        project="Ledger CLI",
+        error="ModuleNotFoundError: No module named 'psycopg2'",
+        fix="Install the binary wheel.",
+        workspace=None,
+        date="2026-10-05",
+    )
+    generic = TroubleEntry(
+        project="Atlas API",
+        error="RecursionError: maximum recursion depth exceeded while calling a Python object",
+        fix="Break the cycle.",
+        workspace=None,
+        date="2026-10-18",
+    )
+    specific_score, _ = score_entry(specific, "psycopg2 python")
+    generic_score, _ = score_entry(generic, "psycopg2 python")
+    assert specific_score > generic_score
 
 
 def test_troubleshooting_in_export(store: Store) -> None:

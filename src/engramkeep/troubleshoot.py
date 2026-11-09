@@ -146,6 +146,17 @@ def _tokens(text: str) -> list[str]:
     return [token for token in _TOKEN_SPLIT.split(text.lower()) if token]
 
 
+def _has_term(text: str, term: str) -> bool:
+    """Match a term on word boundaries, not inside unrelated words.
+
+    Substring matching makes ``git`` match ``digital`` and ``api`` match
+    ``capital``. Boundaries keep literal matches honest; the concept bonus has
+    its own boundary check.
+    """
+    pattern = r"(?<![\w])" + re.escape(term) + r"(?![\w])"
+    return re.search(pattern, text) is not None
+
+
 def score_entry(entry: TroubleEntry, query: str) -> tuple[int, list[str]]:
     """Score an entry against a query. Returns ``(score, matched_query_tokens)``."""
     query_tokens = set(_tokens(query))
@@ -162,15 +173,19 @@ def score_entry(entry: TroubleEntry, query: str) -> tuple[int, list[str]]:
     matched: list[str] = []
     for token in query_tokens:
         token_score = 0
-        if token in project:
+        if _has_term(project, token):
             token_score += 6
-        if token in error:
+        if _has_term(error, token):
             token_score += 4
-        if token in fix:
+        if _has_term(fix, token):
             token_score += 2
-        if token in workspace:
+        if _has_term(workspace, token):
             token_score += 1
         if token_score:
+            # Identifiers with digits (psycopg2, TS2307, 0308010C) are more
+            # specific than a generic word such as "python" or "error".
+            if any(char.isdigit() for char in token):
+                token_score += 1
             score += token_score
             matched.append(token)
 

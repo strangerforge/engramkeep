@@ -1,8 +1,8 @@
 blank_issues_enabled: false
 contact_links:
   - name: Security vulnerability
-    url: https://github.com/engramkeep/engramkeep/security/advisories/new
+    url: https://github.com/strangervibe/engramkeep/security/advisories/new
     about: Report security issues privately. Do not open a public issue.
   - name: Documentation
-    url: https://github.com/engramkeep/engramkeep/tree/main/docs
+    url: https://github.com/strangervibe/engramkeep/tree/main/docs
     about: Read the architecture, privacy, threat model, and compatibility docs.

@@ -1,0 +1,213 @@
+{
+  "schema": 1,
+  "name": "Synthetic fix registry benchmark",
+  "note": "Fifteen realistic, synthetic error/fix pairs. Every query is written the way a developer would type it, not as a copy of the stored error. No real project data is included.",
+  "entries": [
+    {
+      "id": "python-psycopg2-missing",
+      "project": "Ledger CLI",
+      "workspace": "C:/work/ledger-cli",
+      "date": "2026-10-05",
+      "demo": true,
+      "error": "ModuleNotFoundError: No module named 'psycopg2'",
+      "fix": "Install the binary wheel with `pip install \"psycopg[binary]\"`. On Windows, avoid building from source unless PostgreSQL headers and a C compiler are installed.",
+      "queries": [
+        {"q": "ModuleNotFoundError No module named psycopg2", "lang": "en"},
+        {"q": "psycopg2 modülü bulunamadı python", "lang": "tr"},
+        {"q": "pip install psycopg binary wheel windows", "lang": "en"}
+      ]
+    },
+    {
+      "id": "docker-exec-format-arm64",
+      "project": "Harbor Infra",
+      "workspace": "C:/work/harbor-infra",
+      "date": "2026-10-06",
+      "demo": true,
+      "error": "docker: Error response from daemon: exec format error",
+      "fix": "Rebuild the image for the host architecture with `docker buildx build --platform linux/amd64 -t app .`, or publish a multi-arch manifest so ARM hosts pull the right layer.",
+      "queries": [
+        {"q": "docker exec format error m1 mac", "lang": "en"},
+        {"q": "docker imajı arm64 mimarisinde çalışmıyor exec format error", "lang": "tr"},
+        {"q": "buildx platform linux/amd64 multi arch image", "lang": "en"}
+      ]
+    },
+    {
+      "id": "sqlite-database-locked",
+      "project": "Prairie ML",
+      "workspace": "C:/work/prairie-ml",
+      "date": "2026-10-08",
+      "demo": true,
+      "error": "sqlite3.OperationalError: database is locked",
+      "fix": "Enable WAL mode, set `PRAGMA busy_timeout = 5000`, and keep a single writer process. Batch metric writes in the parent instead of letting every worker open the database.",
+      "queries": [
+        {"q": "sqlite3 OperationalError database is locked", "lang": "en"},
+        {"q": "veritabanı kilitli database is locked sqlite", "lang": "tr"},
+        {"q": "sqlite wal busy_timeout multiple workers", "lang": "en"}
+      ]
+    },
+    {
+      "id": "postgres-password-auth",
+      "project": "Atlas API",
+      "workspace": "C:/work/atlas-api",
+      "date": "2026-10-09",
+      "demo": true,
+      "error": "FATAL: password authentication failed for user \"atlas\"",
+      "fix": "Create the role with `CREATE ROLE atlas LOGIN PASSWORD ...`, confirm `pg_hba.conf` uses `scram-sha-256`, and reload PostgreSQL. Test with `psql -U atlas -d atlas` before changing application settings.",
+      "queries": [
+        {"q": "FATAL password authentication failed for user postgres", "lang": "en"},
+        {"q": "postgres şifre doğrulama hatası kullanıcı", "lang": "tr"},
+        {"q": "pg_hba.conf scram-sha-256 role login", "lang": "en"}
+      ]
+    },
+    {
+      "id": "android-keystore-tampered",
+      "project": "Orbit Mobile",
+      "workspace": "C:/work/orbit-mobile",
+      "date": "2026-10-11",
+      "demo": true,
+      "error": "java.security.KeyStoreException: Keystore was tampered with, or password was incorrect",
+      "fix": "Confirm the keystore path, store password, key alias, and key password. A stale CI secret is the usual cause; rotate the secret and rebuild rather than replacing the keystore.",
+      "queries": [
+        {"q": "Keystore was tampered with or password was incorrect android", "lang": "en"},
+        {"q": "android keystore şifresi hatalı imzalama", "lang": "tr"},
+        {"q": "key alias store password gradle signing", "lang": "en"}
+      ]
+    },
+    {
+      "id": "react-max-update-depth",
+      "project": "Signal Dashboard",
+      "workspace": "C:/work/signal-dashboard",
+      "date": "2026-10-12",
+      "demo": true,
+      "error": "Warning: Maximum update depth exceeded. This can happen when a component calls setState inside useEffect, but useEffect either doesn't have a dependency array, or one of the dependencies changes on every render.",
+      "fix": "Move derived values out of render, remove objects and arrays created inline from dependency arrays, and set state only in response to an event or an external change.",
+      "queries": [
+        {"q": "Maximum update depth exceeded useEffect setState", "lang": "en"},
+        {"q": "react sonsuz döngü maximum update depth", "lang": "tr"},
+        {"q": "useEffect dependency array causes rerender loop", "lang": "en"}
+      ]
+    },
+    {
+      "id": "node-openssl-legacy-provider",
+      "project": "Signal Dashboard",
+      "workspace": "C:/work/signal-dashboard",
+      "date": "2026-10-13",
+      "error": "Error: error:0308010C:digital envelope routines::unsupported",
+      "fix": "Upgrade the bundler and its plugins to versions that support the current Node OpenSSL. As a temporary unblock only, run with `NODE_OPTIONS=--openssl-legacy-provider`.",
+      "queries": [
+        {"q": "digital envelope routines unsupported ERR_OSSL_EVP_UNSUPPORTED node", "lang": "en"},
+        {"q": "node openssl hatası webpack derleme", "lang": "tr"},
+        {"q": "NODE_OPTIONS openssl legacy provider", "lang": "en"}
+      ]
+    },
+    {
+      "id": "git-unrelated-histories",
+      "project": "Ledger CLI",
+      "workspace": "C:/work/ledger-cli",
+      "date": "2026-10-14",
+      "error": "fatal: refusing to merge unrelated histories",
+      "fix": "Merge with `git pull origin main --allow-unrelated-histories`, resolve conflicts deliberately, and commit the merge. Do not force-push over either history.",
+      "queries": [
+        {"q": "fatal refusing to merge unrelated histories", "lang": "en"},
+        {"q": "git ilgisiz geçmiş birleştirme hatası", "lang": "tr"},
+        {"q": "allow-unrelated-histories pull origin main", "lang": "en"}
+      ]
+    },
+    {
+      "id": "typescript-ts2307-alias",
+      "project": "Signal Dashboard",
+      "workspace": "C:/work/signal-dashboard",
+      "date": "2026-10-15",
+      "error": "error TS2307: Cannot find module '@/lib/metrics' or its corresponding type declarations.",
+      "fix": "Add `baseUrl` and `paths` to `tsconfig.json`, then mirror the same alias in `vite.config.ts` under `resolve.alias`. Restart the TypeScript server after editing the config.",
+      "queries": [
+        {"q": "TS2307 Cannot find module or its corresponding type declarations", "lang": "en"},
+        {"q": "typescript modül bulunamadı yol takma adı", "lang": "tr"},
+        {"q": "tsconfig paths vite resolve alias @", "lang": "en"}
+      ]
+    },
+    {
+      "id": "terraform-state-lock",
+      "project": "Harbor Infra",
+      "workspace": "C:/work/harbor-infra",
+      "date": "2026-10-16",
+      "error": "Error: Error acquiring the state lock: ConditionalCheckFailedException: The conditional request failed",
+      "fix": "Confirm no other apply or plan is running, then run `terraform force-unlock <LOCK_ID>` with the ID printed in the error. Never delete the lock item from the backend by hand.",
+      "queries": [
+        {"q": "Error acquiring the state lock terraform", "lang": "en"},
+        {"q": "terraform state kilidi alınamıyor force-unlock", "lang": "tr"},
+        {"q": "ConditionalCheckFailedException state lock dynamodb", "lang": "en"}
+      ]
+    },
+    {
+      "id": "vite-failed-resolve-import",
+      "project": "Signal Dashboard",
+      "workspace": "C:/work/signal-dashboard",
+      "date": "2026-10-17",
+      "error": "Failed to resolve import \"@/components/Chart\" from \"src/pages/Dashboard.tsx\". Does the file exist?",
+      "fix": "Declare the `@` alias in `vite.config.ts` with `resolve.alias` and in `tsconfig.json` with `paths`, then restart the dev server. Check that the file extension matches the import.",
+      "queries": [
+        {"q": "Failed to resolve import vite does the file exist", "lang": "en"},
+        {"q": "vite import çözümlenemedi alias", "lang": "tr"},
+        {"q": "resolve.alias vite config typescript paths", "lang": "en"}
+      ]
+    },
+    {
+      "id": "python-recursion-repr",
+      "project": "Atlas API",
+      "workspace": "C:/work/atlas-api",
+      "date": "2026-10-18",
+      "error": "RecursionError: maximum recursion depth exceeded while calling a Python object",
+      "fix": "Find the circular reference first with `repr` or a debugger. Break it by excluding one side from `__repr__` with `field(repr=False)`, or return identifiers instead of nested objects.",
+      "queries": [
+        {"q": "RecursionError maximum recursion depth exceeded python", "lang": "en"},
+        {"q": "python özyineleme hatası dataclass repr", "lang": "tr"},
+        {"q": "dataclass field repr=False circular reference", "lang": "en"}
+      ]
+    },
+    {
+      "id": "github-actions-resource-not-accessible",
+      "project": "Ledger CLI",
+      "workspace": "C:/work/ledger-cli",
+      "date": "2026-10-19",
+      "error": "Resource not accessible by integration",
+      "fix": "Declare the minimum permissions in the workflow: `permissions: contents: read` plus the specific scope the job needs, such as `pull-requests: write`. Organization policy can still restrict the token.",
+      "queries": [
+        {"q": "Resource not accessible by integration github actions", "lang": "en"},
+        {"q": "github actions izin hatası resource not accessible", "lang": "tr"},
+        {"q": "workflow permissions pull-requests write token", "lang": "en"}
+      ]
+    },
+    {
+      "id": "cors-missing-allow-origin",
+      "project": "Atlas API",
+      "workspace": "C:/work/atlas-api",
+      "date": "2026-10-20",
+      "error": "Access to fetch at 'http://127.0.0.1:5173/api/search' from origin 'http://localhost:5173' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.",
+      "fix": "Add `CORSMiddleware` with explicit allowed origins. Use `allow_credentials=True` only with non-wildcard origins, and handle the preflight `OPTIONS` request before authentication.",
+      "queries": [
+        {"q": "blocked by CORS policy No Access-Control-Allow-Origin header", "lang": "en"},
+        {"q": "cors hatası localhost api istek engellendi", "lang": "tr"},
+        {"q": "FastAPI CORSMiddleware allow_origins credentials", "lang": "en"}
+      ]
+    },
+    {
+      "id": "gradle-jdk-mismatch",
+      "project": "Orbit Mobile",
+      "workspace": "C:/work/orbit-mobile",
+      "date": "2026-10-21",
+      "error": "Unsupported class file major version 61",
+      "fix": "Use JDK 17 for Android Gradle Plugin 8.x. Set `JAVA_HOME` for the build and, when the IDE differs, set `org.gradle.java.home` in `gradle.properties`. Re-sync the project afterwards.",
+      "queries": [
+        {"q": "Unsupported class file major version 61 android gradle", "lang": "en"},
+        {"q": "capacitor android derleme jdk sürümü uyumsuz", "lang": "tr"},
+        {"q": "org.gradle.java.home JDK 17 AGP", "lang": "en"}
+      ]
+    }
+  ],
+  "no_match_queries": [
+    "kubernetes ingress certificate renewal",
+    "excel formülü tarih biçimi",
+    "rust borrow checker lifetime"
+  ]
+}

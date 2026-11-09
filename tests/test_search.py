@@ -58,3 +58,11 @@ def test_make_snippet_marks_truncation() -> None:
 
 def test_make_snippet_short_body() -> None:
     assert make_snippet("short body", ["short"]) == "short body"
+
+
+def test_make_snippet_strips_markdown() -> None:
+    body = "# Title\n\n## Decisions\n\n- Use `SQLite` for storage.\n- Keep it local."
+    snippet = make_snippet(body, ["sqlite"])
+    assert "#" not in snippet
+    assert "`" not in snippet
+    assert "SQLite" in snippet

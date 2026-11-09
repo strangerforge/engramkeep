@@ -75,6 +75,44 @@ def test_doctor_json(cli_home: Path, capsys: pytest.CaptureFixture[str]) -> None
     assert report["initialized"] is True
 
 
+def test_install_apply_and_uninstall(
+    cli_home: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    project = tmp_path / "project"
+    project.mkdir()
+    target = project / "CLAUDE.md"
+    target.write_text("# My rules\n\nKeep this.\n", encoding="utf-8")
+
+    args = [
+        "--home",
+        str(cli_home),
+        "install",
+        "--agent",
+        "claude-code",
+        "--scope",
+        "project",
+        "--project-dir",
+        str(project),
+    ]
+    assert main([*args, "--apply"]) == 0
+    text = target.read_text(encoding="utf-8")
+    assert "Keep this." in text
+    assert "<!-- engramkeep:begin -->" in text
+    assert (cli_home / "backups" / "installer").is_dir()
+    assert "updated:" in capsys.readouterr().out
+
+    assert main([*args, "--uninstall"]) == 0
+    assert target.read_text(encoding="utf-8") == "# My rules\n\nKeep this.\n"
+    assert "removed:" in capsys.readouterr().out
+
+
+def test_install_list_agents(cli_home: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    assert main(["install", "--list"]) == 0
+    output = capsys.readouterr().out
+    assert "Claude Code" in output
+    assert "Copilot" in output
+
+
 def test_list_empty(cli_home: Path, capsys: pytest.CaptureFixture[str]) -> None:
     assert main(["init"]) == 0
     capsys.readouterr()
@@ -105,11 +143,28 @@ def test_home_flag_overrides_environment(
     assert str(target.resolve()) in capsys.readouterr().out
 
 
-def test_install_plan_and_unknown_agent(cli_home: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    assert main(["install", "--agent", "opencode"]) == 0
+def test_install_plan_and_unknown_agent(
+    cli_home: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    project = tmp_path / "plan-project"
+    project.mkdir()
+    assert (
+        main(
+            [
+                "install",
+                "--agent",
+                "opencode",
+                "--scope",
+                "project",
+                "--project-dir",
+                str(project),
+            ]
+        )
+        == 0
+    )
     output = capsys.readouterr().out
-    assert "dry run" in output
-    assert "~/.config/opencode/AGENTS.md" in output
+    assert "Dry run" in output
+    assert str(project / "AGENTS.md") in output
 
     assert main(["install", "--agent", "unknown"]) == 1
     assert "unknown agent" in capsys.readouterr().err
@@ -186,7 +241,43 @@ def test_show_missing_project(cli_home: Path, capsys: pytest.CaptureFixture[str]
 
 
 def test_version(capsys: pytest.CaptureFixture[str]) -> None:
+    from engramkeep import __version__
+
     with pytest.raises(SystemExit) as excinfo:
         main(["--version"])
     assert excinfo.value.code == 0
-    assert "0.4.0" in capsys.readouterr().out
+    assert __version__ in capsys.readouterr().out
+
+
+def test_mcp_and_dashboard_status(capsys: pytest.CaptureFixture[str]) -> None:
+    assert main(["mcp", "--status"]) == 0
+    out = capsys.readouterr().out
+    assert "MCP: available" in out
+
+    assert main(["dashboard", "--status"]) == 0
+    out = capsys.readouterr().out
+    assert "Dashboard: available" in out
+
+
+def test_fixes_and_doctor_json(cli_home: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    assert main(["init"]) == 0
+    capsys.readouterr()
+
+    assert main(["fix", "Build failed", "--solution", "Run clean", "--json"]) == 0
+    fix_json = json.loads(capsys.readouterr().out)
+    assert fix_json["error"] == "Build failed"
+
+    assert main(["fixes", "--json"]) == 0
+    fixes_json = json.loads(capsys.readouterr().out)
+    assert len(fixes_json) == 1
+
+    assert main(["doctor", "--json"]) == 0
+    doc_json = json.loads(capsys.readouterr().out)
+    assert doc_json["ok"] is True
+
+
+def test_install_list_flag(capsys: pytest.CaptureFixture[str]) -> None:
+    assert main(["install", "--list"]) == 0
+    out = capsys.readouterr().out
+    assert "Agent: OpenCode" in out
+    assert "Agent: Claude Code" in out

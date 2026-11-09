@@ -33,9 +33,18 @@ class SearchHit:
         }
 
 
+def _plain_text(body: str) -> str:
+    """Flatten Markdown into one readable line for search snippets."""
+    text = re.sub(r"```.*?```", " ", body, flags=re.DOTALL)
+    text = re.sub(r"(?m)^\s{0,3}#{1,6}\s*", "", text)
+    text = re.sub(r"(?m)^\s*[-*+]\s+", "", text)
+    text = text.replace("`", "")
+    return re.sub(r"\s+", " ", text).strip()
+
+
 def make_snippet(body: str, tokens: list[str], *, width: int = 160) -> str:
-    """Build a single-line snippet around the first matching token."""
-    flat = re.sub(r"\s+", " ", body).strip()
+    """Build a single-line plain-text snippet around the first matching token."""
+    flat = _plain_text(body)
     if not flat:
         return ""
 

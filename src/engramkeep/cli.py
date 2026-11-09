@@ -9,8 +9,8 @@ from pathlib import Path
 
 from . import __version__, dashboard, mcp_server
 from .config import resolve_home
-from .errors import EngramkeepError, StoreError
-from .installer import available_agents, format_plan, plan_installation
+from .errors import EngramkeepError, InstallerError, StoreError
+from .installer import available_agents, format_plan, install_agents, plan_installation
 from .models import render_card
 from .paths import atomic_write_text
 from .search import SearchHit, search_cards
@@ -266,13 +266,51 @@ def _cmd_dashboard(args: argparse.Namespace) -> int:
 
 
 def _cmd_install(args: argparse.Namespace) -> int:
+    if args.list_agents:
+        for name in available_agents():
+            print(format_plan(plan_installation(name)))
+            print()
+        return 0
+    if not args.agent:
+        print("error: --agent is required (or use --list)", file=sys.stderr)
+        return 2
+
+    project_dir = Path(args.project_dir).expanduser().resolve() if args.project_dir else Path.cwd()
+    backup_root = resolve_home(args.home) / "backups" / "installer"
     try:
-        plan = plan_installation(args.agent)
+        result = install_agents(
+            args.agent,
+            user_home=Path.home(),
+            project_dir=project_dir,
+            backup_root=backup_root,
+            scope=args.scope,
+            mcp=args.mcp,
+            dry_run=not (args.apply or args.uninstall),
+            remove=args.uninstall,
+        )
     except KeyError as exc:
         print(f"error: {exc.args[0]}", file=sys.stderr)
         print(f"available agents: {', '.join(available_agents())}", file=sys.stderr)
         return 1
-    print(format_plan(plan))
+    except InstallerError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+
+    if args.json:
+        _print_json(result.to_dict())
+        return 0
+
+    for operation in result.operations:
+        line = f"{operation.action}: {operation.target}"
+        if operation.backup:
+            line += f" (backup: {operation.backup})"
+        if operation.reason:
+            line += f" ({operation.reason})"
+        print(line)
+    if result.mode == "dry-run":
+        print("Dry run: no files were modified. Pass --apply to write.")
+    if result.backup_dir:
+        print(f"Backups: {result.backup_dir}")
     return 0
 
 
@@ -385,8 +423,45 @@ def build_parser() -> argparse.ArgumentParser:
     )
     dashboard_parser.set_defaults(handler=_cmd_dashboard)
 
-    install = subparsers.add_parser("install", help="show an agent integration plan (dry run)")
-    install.add_argument("--agent", required=True, help="agent identifier")
+    install = subparsers.add_parser(
+        "install",
+        help="plan or apply agent integration (dry run by default)",
+    )
+    install.add_argument("--agent", help="agent identifier, or 'all'")
+    install.add_argument(
+        "--list",
+        dest="list_agents",
+        action="store_true",
+        help="list supported agents and exit",
+    )
+    install.add_argument(
+        "--scope",
+        choices=["auto", "global", "project"],
+        default="auto",
+        help="target scope (default: global when documented, otherwise project)",
+    )
+    install.add_argument(
+        "--project-dir",
+        metavar="DIR",
+        help="project root for project-scoped targets (default: current directory)",
+    )
+    mode = install.add_mutually_exclusive_group()
+    mode.add_argument(
+        "--apply",
+        action="store_true",
+        help="write the managed block and back up existing files",
+    )
+    mode.add_argument(
+        "--uninstall",
+        action="store_true",
+        help="remove the Engramkeep managed block",
+    )
+    install.add_argument(
+        "--mcp",
+        action="store_true",
+        help="also register the MCP server in the agent JSON config",
+    )
+    install.add_argument("--json", action="store_true", help="print JSON")
     install.set_defaults(handler=_cmd_install)
 
     return parser

@@ -1,6 +1,7 @@
 # Engramkeep
 
-[![CI](https://github.com/engramkeep/engramkeep/actions/workflows/ci.yml/badge.svg)](https://github.com/engramkeep/engramkeep/actions/workflows/ci.yml)
+[![CI](https://github.com/strangervibe/engramkeep/actions/workflows/ci.yml/badge.svg)](https://github.com/strangervibe/engramkeep/actions/workflows/ci.yml)
+[![Kapsam: 85%](https://img.shields.io/badge/Coverage-85%25-brightgreen.svg)](docs/BENCHMARK.md)
 [![Lisans: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://www.python.org/)
 [![Bağımlılık: 0](https://img.shields.io/badge/Dependencies-0%20(stdlib)-brightgreen.svg)](pyproject.toml)
@@ -8,11 +9,24 @@
 
 **Yapay zeka kod ajanları için yerel-öncelikli, Markdown tabanlı kalıcı hafıza.**
 
-Engramkeep; Codex, Claude Code, OpenCode, Cursor, Windsurf, Gemini CLI, Antigravity veya `AGENTS.md` okuyabilen her ajanın aynı proje hafızasını kullanmasını sağlar. Yalnızca Python standart kütüphanesiyle çalışır.
+Engramkeep; Codex, Claude Code, OpenCode, Cursor, Windsurf, Gemini CLI,
+Antigravity veya `AGENTS.md` okuyabilen her ajanın aynı proje hafızasını
+kullanmasını sağlar. Yalnızca Python standart kütüphanesiyle çalışır.
 
-> **Durum: 0.4.0 alpha.** Çekirdek depo, CLI, yol güvenliği, sır temizleme, testler, MCP stdio sunucusu, sertleştirilmiş yerel panel, arıza giderme kayıt defteri ve çift dilli (EN/TR) arama çalışıyor. Ajan kurulumu bu sürümde hâlâ dry-run planlayıcı. Yol haritası: [docs/ROADMAP.md](docs/ROADMAP.md).
+> **Durum: 0.5.0 alpha.** Depo, CLI, MCP sunucusu, panel, arıza giderme kayıt
+> defteri, çift dilli arama ve yedekli ajan kurulumu çalışıyor. Bulut
+> senkronizasyonu, transkript adaptörleri ve şema geçişleri hâlâ yol
+> haritasında. Bkz. [docs/ROADMAP.md](docs/ROADMAP.md).
 
 [English README](README.md)
+
+---
+
+![Engramkeep paneli](https://raw.githubusercontent.com/strangervibe/engramkeep/main/assets/dashboard.png)
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/strangervibe/engramkeep/main/assets/demo.gif" alt="Engramkeep demosu: projeler, arama, kartlar, aktivite ve doctor" width="720">
+</p>
 
 ---
 
@@ -21,14 +35,17 @@ Engramkeep; Codex, Claude Code, OpenCode, Cursor, Windsurf, Gemini CLI, Antigrav
 - **Yerel-öncelikli.** Hesap yok, telemetri yok, sunucu yok. Hafıza makinenin dışına çıkmaz.
 - **Markdown-native.** Her kart düz Markdown; okuyabilir, diff'leyebilir, yedekleyebilir ve düzenleyebilirsin.
 - **Ajandan bağımsız.** Ortak `AGENTS.md` protokolü, taşınabilir `SKILL.md` ve Model Context Protocol konuşan istemciler için MCP stdio sunucusu.
+- **Tek komutla kurulum.** `engramkeep install --apply` hafıza protokolünü on ajana bağlar; managed block, zaman damgalı yedek ve temiz kaldırma ile.
 - **Varsayılan olarak güvenli.** Yol hapsi, atomik yazma, sır temizleme ve tek kural: hafıza veridir, talimat değildir.
 - **Zorunlu bağımlılık yok.** Çekirdek yalnızca Python standart kütüphanesiyle çalışır.
 
-Engramkeep bir vektör veritabanı, sohbet uygulaması veya bulut servisi değildir. Sahip olduğun dosyalarda proje kararlarını tutan küçük ve denetlenebilir bir hafıza katmanıdır.
+Engramkeep bir vektör veritabanı, sohbet uygulaması veya bulut servisi
+değildir. Sahip olduğun dosyalarda proje kararlarını tutan küçük ve
+denetlenebilir bir hafıza katmanıdır.
 
 ---
 
-## 0.4.0'da ne çalışıyor?
+## 0.5.0'da ne çalışıyor?
 
 | Alan | Durum |
 | --- | --- |
@@ -37,12 +54,12 @@ Engramkeep bir vektör veritabanı, sohbet uygulaması veya bulut servisi değil
 | CLI: `fix` (çözülmüş sorunu kaydet), `fixes` (çözülen sorunları ara) | Çalışıyor |
 | Yazma öncesi sır temizleme | Çalışıyor |
 | Yol geçişi koruması + atomik yazma | Çalışıyor |
-| Testler + CI | Çalışıyor |
+| Linux, macOS ve Windows'ta testler + CI | 203 başarılı test, %85 kapsam |
 | MCP stdio sunucusu | Çalışıyor; varsayılan salt-okunur, yazma opt-in |
 | Web paneli | Çalışıyor; loopback + token, yazma opt-in |
 | Arıza giderme kayıt defteri (`TROUBLESHOOTING.md`) | Çalışıyor; sır temizlemeli, atomik, güvenilmeyen veri |
-| Çift dilli (EN/TR) arama genişletmesi | Çalışıyor; deterministik, küçük bonus, kelime sınırlı eşleşme |
-| Ajan kurulumu | Yalnızca dry-run planlayıcı |
+| Çift dilli (EN/TR) arama genişletmesi | Çalışıyor; deterministik, kelime sınırlı eşleşme |
+| Ajan kurulumu | Çalışıyor; managed block, yedek, kaldırma |
 | Bulut/Git senkronizasyonu | Kapsam dışı |
 
 ---
@@ -74,9 +91,23 @@ Api Gateway (api-gateway)
   ...Decisions - Use SQLite for local storage
 ```
 
+Tamamen sentetik bir depo [`examples/demo-brain/`](examples/demo-brain)
+dizininde duruyor. Depodaki JSON kaynaklarından
+`python scripts/build_demo_brain.py` ile üretilir; gerçek proje verisi içermez.
+
 ---
 
 ## Hızlı başlangıç
+
+```bash
+pipx install engramkeep     # veya: pip install engramkeep
+engramkeep init
+engramkeep remember example-project "Yerel depolama için SQLite kullan" --tag database
+engramkeep search sqlite
+engramkeep show example-project
+```
+
+Kaynak koddan:
 
 ```bash
 python -m venv .venv
@@ -88,11 +119,7 @@ python -m venv .venv
 source .venv/bin/activate
 
 pip install -e ".[dev]"
-
 engramkeep init
-engramkeep remember example-project "Yerel depolama için SQLite kullan" --tag database
-engramkeep search sqlite
-engramkeep show example-project
 ```
 
 Paketi kurmadan:
@@ -106,6 +133,46 @@ python -m engramkeep init
 PYTHONPATH=src python -m engramkeep init
 ```
 
+Kendi hafızana dokunmadan demo deposunu dene:
+
+```bash
+engramkeep --home examples/demo-brain search "docker arm64"
+engramkeep --home examples/demo-brain fixes "database is locked"
+engramkeep --home examples/demo-brain dashboard
+```
+
+---
+
+## Hafıza protokolünü ajanlarına kur
+
+Kurulum, ajan talimat dosyalarına küçük bir managed block yazar. Varsayılan
+olarak **dry run**'dır: `--apply` vermeden hiçbir şey değişmez.
+
+```bash
+engramkeep install --list                 # desteklenen ajanlar
+engramkeep install --agent opencode       # planı göster (dry run)
+engramkeep install --agent opencode --apply
+engramkeep install --agent opencode --apply --mcp
+engramkeep install --agent all --apply    # desteklenen tüm ajanlar
+engramkeep install --agent opencode --uninstall
+```
+
+Ne yapar:
+
+| Davranış | Ayrıntı |
+| --- | --- |
+| Managed block | Metin `<!-- engramkeep:begin -->` … `<!-- engramkeep:end -->` arasına yazılır; tekrar çalıştırma yalnızca bu bloğu günceller |
+| Yedekler | Değişen her dosya yanına zaman damgalı `.bak` olarak kopyalanır ve yolu `manifest.json`'a yazılır |
+| Kapsam | `--scope auto` (varsayılan; belgelenmişse global, değilse proje) veya `--scope project --project-dir YOL` |
+| MCP kaydı | `--mcp` ile opt-in; Claude Code, OpenCode ve Cursor için otomatik, diğerlerinde gerekçesiyle atlanır |
+| Kaldırma | `--uninstall` yalnızca managed bloğu siler, dosyanın kalanına dokunmaz |
+| Dry run | Her hedef için `would-create`, `would-update` veya `would-remove` yazar |
+| Üzerine yazmaz | Güvenle ayrıştıramadığı dosyaları düzenlemez; kullanıcı içeriğini silmez |
+
+Desteklenen ajanlar: **OpenCode, Claude Code, OpenAI Codex, Cursor, Windsurf,
+Gemini CLI, Antigravity, GitHub Copilot, Cline ve Roo Code.** `engramkeep
+install --list` platforma göre tam hedef yollarını yazdırır.
+
 ---
 
 ## Hafıza nerede tutulur?
@@ -116,7 +183,8 @@ PYTHONPATH=src python -m engramkeep init
 | macOS | `~/Library/Application Support/Engramkeep` |
 | Linux | `$XDG_DATA_HOME/engramkeep` veya `~/.local/share/engramkeep` |
 
-`ENGRAMKEEP_HOME` ortam değişkeni veya global `--home` bayrağı ile değiştirilebilir:
+`ENGRAMKEEP_HOME` ortam değişkeni veya global `--home` bayrağı ile
+değiştirilebilir:
 
 ```bash
 engramkeep --home ./my-brain init
@@ -135,11 +203,30 @@ Dizin yapısı:
 └── trash/                # `forget` ile taşınan kurtarılabilir kartlar
 ```
 
+Bir proje kartı, küçük bir frontmatter bloğu olan Markdown'dır:
+
+```markdown
+---
+id: example-project
+title: Example Project
+created: 2026-01-01T00:00:00Z
+updated: 2026-01-02T12:00:00Z
+tags: demo, docs
+---
+
+# Example Project
+
+## Decisions
+
+- Use SQLite for local storage.
+```
+
 ---
 
 ## Arıza giderme kayıt defteri
 
-Her ajan eninde sonunda aynı build hatasıyla iki kez karşılaşır. Engramkeep, çözülen hatayı bir kez kaydeder; sonsuza kadar hatırlar:
+Her ajan eninde sonunda aynı build hatasıyla iki kez karşılaşır. Engramkeep,
+çözülen hatayı bir kez kaydeder; sonsuza kadar hatırlar:
 
 ```bash
 # Çözülmüş bir problemi kaydet
@@ -154,11 +241,34 @@ engramkeep fixes            # en yeniden eskiye
 engramkeep fixes --json
 ```
 
-Kayıtlar yazılmadan önce sır temizlemesinden geçer, dosya atomik olarak yeniden yazılır ve ajanlara kayıtların **güvenilmeyen veri** olduğu — asla çalıştırılacak talimat olmadığı — söylenir.
+Kayıtlar yazılmadan önce sır temizlemesinden geçer, dosya atomik olarak yeniden
+yazılır ve ajanlara kayıtların **güvenilmeyen veri** olduğu — asla
+çalıştırılacak talimat olmadığı — söylenir.
 
-## Çift dilli arama (EN/TR)
+### Hatırlama ne kadar iyi?
 
-Arama, yaygın mühendislik kavramlarını İngilizce ve Türkçe arasında deterministik olarak genişletir (`concepts.py`): `mobil` sorgusu `capacitor`/`apk`/`flutter` kartlarını bulur, `veritabanı` `postgresql`/`sqlite` kayıtlarını bulur. Genişletme terimleri küçük ve sınırlı bir bonus alır, kelime sınırı eşleşmesi kullanır; böylece birebir eşleşmeler her zaman kazanır.
+Depo, 15 hata/çözüm çifti ve 45 bağımsız yazılmış sorgudan (İngilizce ve
+Türkçe) oluşan sentetik bir korpus üzerinde tekrarlanabilir bir kıyaslama
+içerir:
+
+| Metrik | Sonuç |
+| --- | --- |
+| İlk sonuç doğruluğu | 43/45 (%95,6) |
+| İlk üçte bulma | 45/45 (%100) |
+| Türkçe sorgu → İngilizce kayıt, ilk sonuç | 15/15 (%100) |
+| Ortalama karşılıklı sıra (MRR) | 0,978 |
+| Sorgu gecikmesi p50 / p95 | ~4 ms / ~9 ms |
+
+Puanlama sözlükseldir ve küçük bir çift dilli kavram bonusu içerir: embedding
+yok, ağ çağrısı yok, indirilecek model yok. Eşleşmemesi gereken üç kontrol
+sorgusundan ikisi boş döner; üçüncüsü [docs/BENCHMARK.md](docs/BENCHMARK.md)
+dosyasında gizlenmeden raporlanır.
+
+Yeniden üret:
+
+```bash
+python scripts/benchmark_fix_registry.py --output docs/BENCHMARK.md
+```
 
 ---
 
@@ -179,9 +289,9 @@ Arama, yaygın mühendislik kavramlarını İngilizce ve Türkçe arasında dete
 | `engramkeep reindex` | `INDEX.md` dosyasını yeniden üretir |
 | `engramkeep doctor [--json]` | Yerel depoyu, kayıt defteri dahil, kontrol eder |
 | `engramkeep path` | Aktif hafıza dizinini yazdırır |
+| `engramkeep install [--list] [--agent AD] [--apply] [--uninstall] [--scope auto\|global\|project] [--mcp]` | Ajan entegrasyonunu planlar veya uygular |
 | `engramkeep mcp [--status] [--allow-write]` | MCP stdio sunucusunu çalıştırır veya durumunu yazdırır |
 | `engramkeep dashboard [--status] [--port PORT] [--allow-write]` | Yerel paneli çalıştırır veya durumunu yazdırır |
-| `engramkeep install --agent <ad>` | Planlanan ajan entegrasyonunu gösterir (dry-run) |
 
 ---
 
@@ -198,7 +308,8 @@ Depoda hazır şablonlar var:
 - [`templates/agents/AGENTS.md`](templates/agents/AGENTS.md)
 - [`templates/rules/`](templates/rules/) — Claude Code, Cursor, Windsurf, OpenCode
 
-Örnek hedefler:
+`engramkeep install --agent <ad> --apply` bunu senin için yapar; dilersen
+şablonları elle de kopyalayabilirsin:
 
 | Ajan | Tipik hedef |
 | --- | --- |
@@ -210,8 +321,6 @@ Depoda hazır şablonlar var:
 | Gemini CLI / Antigravity | `GEMINI.md` veya `AGENTS.md` |
 | Herhangi bir MCP istemcisi | `engramkeep mcp` (stdio) |
 
-Kurulum 0.4.0'da **dry-run planlayıcıdır**; ajan yapılandırmasını değiştirmez. Otomatik, yedekli ve managed-block kurulum planlanıyor.
-
 ### MCP
 
 Sunucuyu başlat:
@@ -220,7 +329,8 @@ Sunucuyu başlat:
 engramkeep mcp
 ```
 
-Sunucu, stdio üzerinden satır sonuyla ayrılmış JSON-RPC 2.0 ve `2025-11-25` protokol sürümünü kullanır. Tipik bir istemci yapılandırması:
+Sunucu, stdio üzerinden satır sonuyla ayrılmış JSON-RPC 2.0 ve `2025-11-25`
+protokol sürümünü kullanır. Tipik bir istemci yapılandırması:
 
 ```json
 {
@@ -233,7 +343,10 @@ Sunucu, stdio üzerinden satır sonuyla ayrılmış JSON-RPC 2.0 ve `2025-11-25`
 }
 ```
 
-Varsayılan araç seti salt-okunurdur: `engramkeep_search`, `engramkeep_show`, `engramkeep_list`, `engramkeep_recent`, `engramkeep_doctor` ve `engramkeep_fixes`. Yazma araçlarını (`engramkeep_remember`, `engramkeep_record_fix`) açmak için sunucuyu `--allow-write` ile başlat:
+Varsayılan araç seti salt-okunurdur: `engramkeep_search`, `engramkeep_show`,
+`engramkeep_list`, `engramkeep_recent`, `engramkeep_doctor` ve
+`engramkeep_fixes`. Yazma araçlarını (`engramkeep_remember`,
+`engramkeep_record_fix`) açmak için sunucuyu `--allow-write` ile başlat:
 
 ```json
 {
@@ -246,7 +359,9 @@ Varsayılan araç seti salt-okunurdur: `engramkeep_search`, `engramkeep_show`, `
 }
 ```
 
-MCP üzerinden unutma (forget) aracı yoktur. Yıkıcı işlemler için CLI kullanılmalı ve açık onay istenmelidir. Taşıma, protokol sürümü ve yazma modu için `engramkeep mcp --status` çalıştır.
+MCP üzerinden unutma (forget) aracı yoktur. Yıkıcı işlemler için CLI
+kullanılmalı ve açık onay istenmelidir. Taşıma, protokol sürümü ve yazma modu
+için `engramkeep mcp --status` çalıştır.
 
 ### Panel
 
@@ -256,7 +371,9 @@ Yerel paneli başlat:
 engramkeep dashboard
 ```
 
-Panel `127.0.0.1` adresine bağlanır ve fragment içinde oturum token'ı bulunan bir URL yazdırır. Token HTML'e gömülmez; tarayıcı onu `sessionStorage` içinde tutar ve `X-Engramkeep-Token` başlığıyla gönderir.
+Panel `127.0.0.1` adresine bağlanır ve fragment içinde oturum token'ı bulunan
+bir URL yazdırır. Token HTML'e gömülmez; tarayıcı onu `sessionStorage` içinde
+tutar ve `X-Engramkeep-Token` başlığıyla gönderir.
 
 Panel varsayılan olarak salt-okunurdur. Hatırlama formunu açmak için:
 
@@ -264,7 +381,9 @@ Panel varsayılan olarak salt-okunurdur. Hatırlama formunu açmak için:
 engramkeep dashboard --allow-write
 ```
 
-Yazmalar yalnızca POST ile ve `confirm: true` ile yapılır. Unutma (forget) düğmesi yoktur. Boş bir port için `--port 0` kullan; makine tarafından okunabilir güvenlik bilgisi için `engramkeep dashboard --status` çalıştır.
+Yazmalar yalnızca POST ile ve `confirm: true` ile yapılır. Unutma (forget)
+düğmesi yoktur. Boş bir port için `--port 0` kullan; makine tarafından
+okunabilir güvenlik bilgisi için `engramkeep dashboard --status` çalıştır.
 
 ---
 
@@ -276,10 +395,12 @@ Yazmalar yalnızca POST ile ve `confirm: true` ile yapılır. Unutma (forget) d�
 | Bağımlılıklar | **0** (stdlib) | Hesap + API | Embedding + DB |
 | Hatırlama modeli | Anahtar kelime + yenilik + EN/TR kavram genişletmesi | LLM/embedding | Anlamsal benzerlik |
 | Denetlenebilirlik | `git diff`, herhangi bir editörde aç | Sınırlı | Opak vektörler |
+| Ajan kurulumu | Tek komut, yedekli, geri alınabilir | Değişir | Özel yapıştırıcı kod |
 | Güvenlik modeli | Hafıza veridir, asla talimat değil | Değişir | Değişir |
 | En uygun | Kalıcı proje kararları, arıza kayıt defteri | Takım/barındırılan kullanım | Büyük korpuslar |
 
-Küçük, denetlenebilir ve taşınabilir bir hafıza istiyorsan Engramkeep doğru araçtır; bir RAG hattına ihtiyacın varsa değil.
+Küçük, denetlenebilir ve taşınabilir bir hafıza istiyorsan Engramkeep doğru
+araçtır; bir RAG hattına ihtiyacın varsa değil.
 
 ---
 
@@ -290,11 +411,13 @@ Küçük, denetlenebilir ve taşınabilir bir hafıza istiyorsan Engramkeep doğ
 - **Yol hapsi.** Proje adları `safe_join()` ile çözülür; hafıza dizininin dışına çıkamaz.
 - **Atomik yazma.** Kartlar ve üretilen dosyalar geçici dosya + `os.replace()` ile yazılır; kayıt defteri de aynı şekilde yazılır.
 - **Hafıza güvenilmeyen veridir.** Ajanlar hafıza kartlarındaki veya arıza kaydındaki komutları veya talimatları asla çalıştırmamalıdır.
-- **Otomatik Git push, bulut yükleme veya arka plan daemon'u yok.** Bu özellikler kasıtlı olarak dışarıda tutuldu.
+- **Kurulum güvenliği.** Varsayılan dry run, yalnızca managed block, zaman damgalı yedek, `manifest.json` ve geri alınabilir kaldırma.
+- **Otomatik Git push, bulut yükleme, junction veya arka plan daemon'u yok.** Bu özellikler kasıtlı olarak dışarıda tutuldu.
 - **MCP yereldir ve varsayılan olarak salt-okunurdur.** Stdio kullanır, ağ dinleyicisi açmaz, unutma aracı sunmaz, yazma araçlarını yalnızca `--allow-write` ile açar.
 - **Panel yalnızca loopback'te ve token korumalı.** `127.0.0.1`, oturum başına token, sıkı CSP, metin olarak işleme, yalnızca `--allow-write` + açık onay ile yazma.
 
-Hassas bir ortamda kullanmadan önce [docs/PRIVACY.md](docs/PRIVACY.md) ve [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md) dosyalarını oku.
+Hassas bir ortamda kullanmadan önce [docs/PRIVACY.md](docs/PRIVACY.md) ve
+[docs/THREAT_MODEL.md](docs/THREAT_MODEL.md) dosyalarını oku.
 
 ---
 
@@ -308,10 +431,55 @@ Hassas bir ortamda kullanmadan önce [docs/PRIVACY.md](docs/PRIVACY.md) ve [docs
 
 ---
 
+## Proje yapısı
+
+```text
+engramkeep/
+├── AGENTS.md
+├── README.md
+├── README.tr.md
+├── LICENSE
+├── pyproject.toml
+├── src/engramkeep/
+│   ├── cli.py
+│   ├── config.py
+│   ├── concepts.py        # çift dilli EN/TR kavram genişletmesi
+│   ├── models.py
+│   ├── paths.py
+│   ├── redact.py
+│   ├── search.py
+│   ├── store.py
+│   ├── troubleshoot.py    # arıza kayıt defteri (TROUBLESHOOTING.md)
+│   ├── mcp_server.py      # MCP stdio sunucusu
+│   ├── dashboard.py       # sertleştirilmiş yerel panel
+│   ├── installer.py       # yedekli, managed-block ajan kurulumu
+│   └── adapters/          # gelecekteki transkript adaptörleri
+├── assets/                # dashboard.png, demo.gif
+├── examples/
+│   ├── brain/             # minimal geçerli depo
+│   ├── demo-brain/        # üretilmiş sentetik depo
+│   ├── demo-cards.json
+│   └── fix-registry/      # kıyaslama korpusu
+├── scripts/
+│   ├── build_demo_brain.py
+│   └── benchmark_fix_registry.py
+├── skills/engramkeep/SKILL.md
+├── templates/
+├── tests/                 # 203 test
+├── docs/
+└── .github/
+```
+
+---
+
 ## Katkı ve lisans
 
-Katkılar memnuniyetle karşılanır. [CONTRIBUTING.md](CONTRIBUTING.md) ile başla, [Code of Conduct](CODE_OF_CONDUCT.md) kurallarına uy ve güvenlik sorunlarını [SECURITY.md](SECURITY.md) üzerinden bildir.
+Katkılar memnuniyetle karşılanır. [CONTRIBUTING.md](CONTRIBUTING.md) ile başla,
+[Code of Conduct](CODE_OF_CONDUCT.md) kurallarına uy ve güvenlik sorunlarını
+[SECURITY.md](SECURITY.md) üzerinden bildir. Yeni başlayanlar için görevler:
+[docs/GOOD_FIRST_ISSUES.md](docs/GOOD_FIRST_ISSUES.md).
 
 MIT lisansı. Bkz. [LICENSE](LICENSE).
 
-Engramkeep; Google, Anthropic, OpenAI, Anysphere, Cognition veya başka bir ajan sağlayıcısıyla bağlantılı değildir. Bkz. [TRADEMARKS.md](TRADEMARKS.md).
+Engramkeep; Google, Anthropic, OpenAI, Anysphere, Cognition veya başka bir ajan
+sağlayıcısıyla bağlantılı değildir. Bkz. [TRADEMARKS.md](TRADEMARKS.md).

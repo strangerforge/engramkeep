@@ -9,9 +9,66 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Planned
 
-- Installer with backups and managed blocks.
 - Schema migrations.
 - Read-only, consent-based transcript adapters (Claude Code JSONL first).
+- Optional embedding-free semantic reranking.
+
+## [0.5.0] - 2026-11-09
+
+### Added
+
+- Agent installer (`engramkeep install`) for ten agents: OpenCode, Claude Code,
+  OpenAI Codex, Cursor, Windsurf, Gemini CLI, Antigravity, GitHub Copilot,
+  Cline, and Roo Code.
+  - Dry run by default; `--apply` writes and `--uninstall` removes.
+  - Managed blocks delimited by `<!-- engramkeep:begin -->` and
+    `<!-- engramkeep:end -->`, so re-running updates only its own block.
+  - Timestamped backups and a `manifest.json` recording every change.
+  - `--scope auto`, `--scope global`, and `--scope project --project-dir PATH`.
+  - Automatic MCP registration for Claude Code, OpenCode, and Cursor; other
+    agents are skipped with a printed reason.
+  - `engramkeep install --list` prints every agent and target path.
+- Read-only troubleshooting fixes endpoint (`/api/fixes`) and UI section in the
+  local dashboard (`engramkeep dashboard`).
+- Deterministic synthetic demo store (`examples/demo-brain/`) generated from
+  `examples/demo-cards.json` and `examples/fix-registry/fixes.json`.
+- Reproducible fix-recall benchmark (`scripts/benchmark_fix_registry.py`) and
+  [docs/BENCHMARK.md](docs/BENCHMARK.md): 15 error/fix pairs, 45 English and
+  Turkish queries, top-1, top-3, MRR, latency, and no-match controls.
+- `tests/test_examples.py` verifies the sources, the health of the checked-in
+  demo store, a byte-for-byte rebuild, and a benchmark quality floor.
+- README screenshots and a demo GIF in `assets/`.
+
+### Changed
+
+- Registry and card search refine ranking with word-boundary matching, so
+  `git` no longer matches `digital` and `api` no longer matches `capital`.
+  Tokens containing digits (`psycopg2`, `TS2307`, `0308010C`) receive a small
+  specificity bonus.
+- Search snippets strip Markdown headings, list markers, backticks, and code
+  fences, producing readable one-line results.
+- CI now runs coverage with an 85% threshold.
+- Version bumped to 0.5.0.
+
+### Removed
+
+- The `engram` console-script alias. It could collide with the unrelated
+  `engram` package on PyPI; use `engramkeep`.
+
+### Fixed
+
+- Installer dry-run action names are explicit (`would-create`,
+  `would-update`, `would-remove`) and uninstall dry runs no longer report a
+  write.
+- CLI install test now targets a temporary project scope instead of a real
+  user configuration directory.
+
+### Security
+
+- Installer never edits a file it cannot parse safely, writes only inside a
+  managed block, and keeps a backup and manifest for every change.
+- Repository hygiene allowlists the synthetic demo audit log only; real store
+  logs remain private artifacts.
 
 ## [0.4.0] - 2026-11-09
 

@@ -1,0 +1,54 @@
+{
+  "schema": 1,
+  "note": "Synthetic project cards for the Engramkeep demo store. No real project names, people, or secrets.",
+  "cards": [
+    {
+      "id": "atlas-api",
+      "title": "Atlas API",
+      "created": "2026-10-02T09:15:00Z",
+      "updated": "2026-10-21T16:40:00Z",
+      "tags": ["api", "database", "python"],
+      "body": "# Atlas API\n\nSynthetic service notes for the Engramkeep demo store.\n\n## Decisions\n\n- Use FastAPI with Pydantic v2 models at the HTTP boundary.\n- Store money as integer cents in PostgreSQL; never use floats.\n- Keep authentication in one `auth` module; sessions are opaque tokens in a `sessions` table.\n- Run Alembic migrations in CI before deploying.\n\n## Gotchas\n\n- PostgreSQL `password authentication failed` during local setup usually means the role does not exist yet, not that the password is wrong.\n- `psycopg2` needs a binary wheel on Windows; prefer `psycopg[binary]` in development.\n- Connections leak when a request raises before the dependency closes; keep the session in a context manager.\n\n## Next steps\n\n- Add request-id logging.\n- Benchmark the `/search` endpoint with 10k rows.\n"
+    },
+    {
+      "id": "orbit-mobile",
+      "title": "Orbit Mobile",
+      "created": "2026-10-03T11:05:00Z",
+      "updated": "2026-10-18T10:20:00Z",
+      "tags": ["mobile", "android", "offline"],
+      "body": "# Orbit Mobile\n\nSynthetic Capacitor app notes for the Engramkeep demo store.\n\n## Decisions\n\n- Ship a Capacitor hybrid app instead of two native codebases.\n- Queue writes in SQLite and sync when the device is online; never block the UI on the network.\n- Keep the Android keystore outside the repository and load secrets from CI variables.\n- Pin the Gradle wrapper and use JDK 17 for every build.\n\n## Gotchas\n\n- A keystore error is usually a wrong alias or a stale password, not a corrupted file.\n- SQLite writes from two isolates cause `database is locked`; keep one writer.\n- Offline timestamps must be stored in UTC and reconciled on the server.\n\n## Next steps\n\n- Add a background sync retry with exponential backoff.\n- Test the upgrade path from the previous app version.\n"
+    },
+    {
+      "id": "ledger-cli",
+      "title": "Ledger CLI",
+      "created": "2026-10-04T14:30:00Z",
+      "updated": "2026-10-22T08:10:00Z",
+      "tags": ["cli", "python", "packaging"],
+      "body": "# Ledger CLI\n\nSynthetic command-line bookkeeping tool for the Engramkeep demo store.\n\n## Decisions\n\n- Keep the package dependency-free at runtime.\n- Represent amounts with `decimal.Decimal`, never binary floats.\n- Publish wheels through GitHub Actions and verify them with `twine check`.\n- Keep the CLI deterministic: no network access, no background jobs.\n\n## Gotchas\n\n- `pip install` from a source checkout can pick up a stale build directory; use an isolated virtual environment.\n- Editable installs hide missing package data; test the built wheel in a clean environment.\n- CI tokens need explicit `permissions:` when the default token is read-only.\n\n## Next steps\n\n- Add import from CSV with a dry-run preview.\n- Document the exit codes.\n"
+    },
+    {
+      "id": "signal-dashboard",
+      "title": "Signal Dashboard",
+      "created": "2026-10-05T10:00:00Z",
+      "updated": "2026-10-23T17:45:00Z",
+      "tags": ["frontend", "typescript", "accessibility"],
+      "body": "# Signal Dashboard\n\nSynthetic React dashboard for the Engramkeep demo store.\n\n## Decisions\n\n- Use React with TypeScript and Vite for the build.\n- Keep chart colours in design tokens; never hard-code hex values in components.\n- Every interactive control needs a visible focus state and a keyboard path.\n- Prefer server-side filtering over shipping the whole dataset to the browser.\n\n## Gotchas\n\n- Vite and `tsconfig` must agree on path aliases, or imports work in the editor and fail at build time.\n- A `useEffect` that sets state from a derived value causes an update loop.\n- Chart libraries often ignore `prefers-reduced-motion`; disable animation explicitly.\n\n## Next steps\n\n- Add a table view for screen readers.\n- Profile the first render with 5k points.\n"
+    },
+    {
+      "id": "harbor-infra",
+      "title": "Harbor Infra",
+      "created": "2026-10-06T08:25:00Z",
+      "updated": "2026-10-24T09:30:00Z",
+      "tags": ["infra", "docker", "terraform"],
+      "body": "# Harbor Infra\n\nSynthetic deployment notes for the Engramkeep demo store.\n\n## Decisions\n\n- Build multi-architecture images in CI with `docker buildx`.\n- Keep Terraform state in a remote backend with locking enabled.\n- Pin every image tag to a digest in production.\n- Run one deployment at a time; the pipeline holds the lock.\n\n## Gotchas\n\n- An `exec format error` on an ARM machine usually means the image was built for the wrong platform.\n- Terraform state locks outlive crashed CI runs; confirm no apply is active before forcing an unlock.\n- `latest` tags make rollbacks ambiguous; deploy digests instead.\n\n## Next steps\n\n- Add a smoke test after deploy.\n- Document the rollback procedure.\n"
+    },
+    {
+      "id": "prairie-ml",
+      "title": "Prairie ML",
+      "created": "2026-10-07T13:10:00Z",
+      "updated": "2026-10-20T12:05:00Z",
+      "tags": ["ml", "python", "reproducibility"],
+      "body": "# Prairie ML\n\nSynthetic experiment-tracking notes for the Engramkeep demo store.\n\n## Decisions\n\n- Record the dataset hash, git commit, and random seed with every run.\n- Store metrics in SQLite for local runs and export CSV for sharing.\n- Keep training scripts in the repository; keep datasets and checkpoints outside it.\n- Compare runs with the same seed before drawing conclusions.\n\n## Gotchas\n\n- Parallel workers writing metrics to one SQLite file trigger `database is locked`; batch writes in the parent process.\n- Sorting a dict of floats for a report hides ties; sort by metric and name.\n- A notebook is not a reproducible experiment until it runs top-to-bottom in a clean environment.\n\n## Next steps\n\n- Add a `--dry-run` mode that validates paths and config only.\n- Publish a small synthetic dataset with the examples.\n"
+    }
+  ]
+}

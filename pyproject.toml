@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "engramkeep"
-version = "0.4.0"
+version = "0.5.0"
 description = "Local-first, Markdown-native persistent memory for AI coding agents."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -39,13 +39,12 @@ dev = [
 
 [project.scripts]
 engramkeep = "engramkeep.cli:main"
-engram = "engramkeep.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/engramkeep/engramkeep"
-Documentation = "https://github.com/engramkeep/engramkeep/tree/main/docs"
-Issues = "https://github.com/engramkeep/engramkeep/issues"
-Changelog = "https://github.com/engramkeep/engramkeep/blob/main/CHANGELOG.md"
+Homepage = "https://github.com/strangervibe/engramkeep"
+Documentation = "https://github.com/strangervibe/engramkeep/tree/main/docs"
+Issues = "https://github.com/strangervibe/engramkeep/issues"
+Changelog = "https://github.com/strangervibe/engramkeep/blob/main/CHANGELOG.md"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/engramkeep"]
@@ -74,3 +73,6 @@ disallow_untyped_defs = true
 
 [tool.coverage.run]
 source = ["engramkeep"]
+
+[tool.coverage.report]
+fail_under = 80

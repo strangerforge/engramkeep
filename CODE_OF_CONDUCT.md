@@ -48,7 +48,7 @@ project in public spaces.
 ## Reporting
 
 If you experience or witness unacceptable behavior, report it privately to the
-maintainers through GitHub. Do not include sensitive personal information in a
+maintainer ([@strangervibe](https://github.com/strangervibe)) through GitHub. Do not include sensitive personal information in a
 public issue. Maintainers will review reports promptly and fairly, and will
 respect the privacy and security of the reporter.
 

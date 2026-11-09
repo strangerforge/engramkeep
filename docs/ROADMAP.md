@@ -28,7 +28,7 @@ release.
 Security gate: threat model updated, no network listener, no write tool by
 default, no path escape, no command execution from card content.
 
-## 0.3.0 - Dashboard (current)
+## 0.3.0 - Dashboard (released)
 
 - [x] Hardened dashboard: loopback bind, per-session token, strict CSP, path
   jail, text-only rendering, POST-only mutations.
@@ -53,23 +53,28 @@ escape, and no mutation on GET.
 Security gate: registry entries are untrusted data, redacted before write, and
 symlinked registry files are refused.
 
-## 0.5.0 - Installer and migrations
+## 0.5.0 - Installer, demo, and benchmark (current)
 
-- Installer that previews, backs up, and updates a managed block.
+- [x] Installer that previews, backs up, and updates a managed block for ten
+  agents, with `--apply`, `--uninstall`, and `--scope project`.
+- [x] Timestamped backups and `manifest.json` for every installer change.
+- [x] Automatic MCP registration for Claude Code, OpenCode, and Cursor.
+- [x] Dashboard surfacing for the troubleshooting registry (read-only).
+- [x] Deterministic synthetic demo store and reproducible fix-recall benchmark.
+- [x] CI coverage threshold and demo/benchmark regression tests.
+- [ ] Schema migration framework. (Moved to 0.6.0.)
+
+Security gate: every installer change is backed up and reversible; the
+installer never edits a file it cannot parse safely.
+
+## 0.6.0 - Import, search, and migrations
+
 - Schema migration framework.
-- More tests for installer backups, managed-block updates, and symlink
-  rejection.
-
-Security gate: every installer change is backed up and reversible.
-
-## 0.6.0 - Import and encryption
-
 - Read-only transcript adapters with explicit consent and documented paths
   (Claude Code JSONL first). Imported text is treated as untrusted.
 - Optional encryption at rest with a user-supplied key.
 - Better search: field weighting, phrase support, and deterministic snippets.
 - Import dry-run that shows exactly what would be written.
-- Dashboard surfacing for the troubleshooting registry (read-only).
 
 Security gate: imported text is treated as untrusted, encrypted stores never
 write plaintext to disk, and key handling is documented.

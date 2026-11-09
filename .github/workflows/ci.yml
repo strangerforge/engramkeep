@@ -42,8 +42,11 @@ jobs:
       - name: Check formatting
         run: ruff format --check .
 
+      - name: Typecheck
+        run: mypy src
+
       - name: Test
-        run: python -m pytest
+        run: python -m pytest --cov=engramkeep --cov-report=term-missing --cov-fail-under=80
 
       - name: Repository hygiene
         run: python scripts/check_repo_hygiene.py
