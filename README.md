@@ -55,7 +55,7 @@ own.
 | CLI: `fix` (record a solved problem), `fixes` (search solved problems) | Working |
 | Secret redaction before write | Working |
 | Path traversal protection + atomic writes | Working |
-| Tests + CI on Linux, macOS, and Windows | 203 passing tests, 85% coverage |
+| Tests + CI on Linux, macOS, and Windows | 211 tests, 85% coverage |
 | MCP stdio server | Working; read-only by default, writes opt-in |
 | Web dashboard | Working; loopback + token, writes opt-in |
 | Troubleshooting registry (`TROUBLESHOOTING.md`) | Working; redacted, atomic, untrusted data |
@@ -479,7 +479,7 @@ engramkeep/
 │   └── benchmark_fix_registry.py
 ├── skills/engramkeep/SKILL.md
 ├── templates/
-├── tests/                 # 203 tests
+├── tests/                 # 211 tests
 ├── docs/
 └── .github/
 ```

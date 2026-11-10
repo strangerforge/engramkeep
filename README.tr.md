@@ -54,7 +54,7 @@ denetlenebilir bir hafıza katmanıdır.
 | CLI: `fix` (çözülmüş sorunu kaydet), `fixes` (çözülen sorunları ara) | Çalışıyor |
 | Yazma öncesi sır temizleme | Çalışıyor |
 | Yol geçişi koruması + atomik yazma | Çalışıyor |
-| Linux, macOS ve Windows'ta testler + CI | 203 başarılı test, %85 kapsam |
+| Linux, macOS ve Windows'ta testler + CI | 211 test, %85 kapsam |
 | MCP stdio sunucusu | Çalışıyor; varsayılan salt-okunur, yazma opt-in |
 | Web paneli | Çalışıyor; loopback + token, yazma opt-in |
 | Arıza giderme kayıt defteri (`TROUBLESHOOTING.md`) | Çalışıyor; sır temizlemeli, atomik, güvenilmeyen veri |
@@ -474,7 +474,7 @@ engramkeep/
 │   └── benchmark_fix_registry.py
 ├── skills/engramkeep/SKILL.md
 ├── templates/
-├── tests/                 # 203 test
+├── tests/                 # 211 test
 ├── docs/
 └── .github/
 ```

@@ -47,7 +47,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   specificity bonus.
 - Search snippets strip Markdown headings, list markers, backticks, and code
   fences, producing readable one-line results.
-- CI now runs coverage with an 85% threshold.
+- CI now runs coverage with an 80% threshold (actual coverage 85%+).
 - Version bumped to 0.5.0.
 
 ### Removed

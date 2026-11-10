@@ -31,7 +31,7 @@ standard library alone. No account, no cloud, no vector database.
 
 **Proof points:**
 
-- 203 tests, 85% coverage, CI on Linux, macOS, and Windows.
+- 211 tests, 85% coverage, CI on Linux, macOS, and Windows.
 - 95.6% top-1 and 100% top-3 on a reproducible 45-query EN/TR benchmark.
 - 100% top-1 for Turkish queries against English entries.
 - Ten supported agents, managed blocks, backups, and reversible uninstall.
@@ -160,7 +160,7 @@ concrete result worth showing.
 > - a troubleshooting registry for solved errors
 > - zero runtime dependencies
 >
-> 203 tests. 85% coverage. 95.6% top-1 on a reproducible EN/TR benchmark.
+> 211 tests. 85% coverage. 95.6% top-1 on a reproducible EN/TR benchmark.
 >
 > pipx install engramkeep
 > github.com/strangervibe/engramkeep

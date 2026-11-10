@@ -31,6 +31,7 @@ python scripts/build_demo_brain.py
 python scripts/benchmark_fix_registry.py --output docs/BENCHMARK.md
 ruff check .
 ruff format --check .
+mypy src
 ```
 
 `ruff` and `mypy` are installed through the `dev` extra. CI runs on Windows, Linux, and macOS.
@@ -89,6 +90,7 @@ ruff format --check .
 - [ ] Tests added or updated.
 - [ ] `python -m pytest` passes.
 - [ ] `ruff check .` passes.
+- [ ] `mypy src` passes.
 - [ ] `python scripts/check_repo_hygiene.py` passes.
 - [ ] No secrets, personal data, or real project names.
 - [ ] Docs and `CHANGELOG.md` updated.
