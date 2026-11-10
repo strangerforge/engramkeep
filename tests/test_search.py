@@ -66,3 +66,12 @@ def test_make_snippet_strips_markdown() -> None:
     assert "#" not in snippet
     assert "`" not in snippet
     assert "SQLite" in snippet
+
+
+def test_search_cards_uses_word_boundaries() -> None:
+    capital = _card("capital-city", "Digital envelope routine without the short tokens")
+    api_card = _card("api-gateway", "Keep the API local")
+    assert search_cards([capital], "api") == []
+    assert search_cards([capital], "git") == []
+    hits = search_cards([capital, api_card], "api")
+    assert [hit.id for hit in hits] == ["api-gateway"]

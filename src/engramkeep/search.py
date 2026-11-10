@@ -95,14 +95,15 @@ def search_cards(
         matched_tokens = 0
 
         for token in tokens:
+            pattern = re.compile(r"(?<![\w])" + re.escape(token) + r"(?![\w])")
             token_score = 0
-            if token in title:
+            if pattern.search(title):
                 token_score += 10
-            if token in project_id:
+            if pattern.search(project_id):
                 token_score += 5
-            if any(token in item for item in card_tags):
+            if any(pattern.search(item) for item in card_tags):
                 token_score += 6
-            occurrences = body.count(token)
+            occurrences = len(pattern.findall(body))
             if occurrences:
                 token_score += min(occurrences, 5)
             if token_score:

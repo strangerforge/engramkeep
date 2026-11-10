@@ -1,11 +1,12 @@
 # Engramkeep
 
 [![CI](https://github.com/strangervibe/engramkeep/actions/workflows/ci.yml/badge.svg)](https://github.com/strangervibe/engramkeep/actions/workflows/ci.yml)
-[![Coverage: 85%](https://img.shields.io/badge/Coverage-85%25-brightgreen.svg)](docs/BENCHMARK.md)
+[![Coverage: 85%](https://img.shields.io/badge/Coverage-85%25-brightgreen.svg)](https://github.com/strangervibe/engramkeep/actions/workflows/ci.yml)
+[![Benchmark: 95.6% top-1](https://img.shields.io/badge/Benchmark-95.6%25%20top--1-blue.svg)](docs/BENCHMARK.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://www.python.org/)
 [![Dependencies: 0](https://img.shields.io/badge/Dependencies-0%20(stdlib)-brightgreen.svg)](pyproject.toml)
-[![MCP](https://img.shields.io/badge/MCP-JSON--RPC%202.0-purple.svg)](#mcp)
+[![MCP: 2025-11-25](https://img.shields.io/badge/MCP-2025--11--25-purple.svg)](#mcp)
 
 **Local-first, Markdown-native memory for AI coding agents.**
 
@@ -14,7 +15,7 @@ Windsurf, Gemini CLI, Antigravity, or anything that can read `AGENTS.md` — the
 same persistent, human-readable project memory. It runs on the Python standard
 library alone.
 
-> **Status: 0.5.0 alpha.** The store, CLI, MCP server, dashboard,
+> **Status: 0.5.1 alpha.** The store, CLI, MCP server, dashboard,
 > troubleshooting registry, bilingual search, and the backed-up agent
 > installer work. Cloud sync, transcript adapters, and schema migrations are
 > still ahead. See [docs/ROADMAP.md](docs/ROADMAP.md).
@@ -46,7 +47,7 @@ own.
 
 ---
 
-## What works in 0.5.0
+## What works in 0.5.1
 
 | Area | Status |
 | --- | --- |
@@ -55,7 +56,7 @@ own.
 | CLI: `fix` (record a solved problem), `fixes` (search solved problems) | Working |
 | Secret redaction before write | Working |
 | Path traversal protection + atomic writes | Working |
-| Tests + CI on Linux, macOS, and Windows | 211 tests, 85% coverage |
+| Tests + CI on Linux, macOS, and Windows | 233 tests, 85% coverage |
 | MCP stdio server | Working; read-only by default, writes opt-in |
 | Web dashboard | Working; loopback + token, writes opt-in |
 | Troubleshooting registry (`TROUBLESHOOTING.md`) | Working; redacted, atomic, untrusted data |
@@ -292,7 +293,7 @@ python scripts/benchmark_fix_registry.py --output docs/BENCHMARK.md
 | `engramkeep reindex` | Regenerate `INDEX.md` |
 | `engramkeep doctor [--json]` | Check the local store, including the registry |
 | `engramkeep path` | Print the active memory directory |
-| `engramkeep install [--list] [--agent NAME] [--apply] [--uninstall] [--scope auto\|global\|project] [--mcp]` | Plan or apply agent integration |
+| `engramkeep install [--list] [--agent NAME] [--apply] [--uninstall] [--scope auto\|global\|project] [--project-dir PATH] [--mcp]` | Plan or apply agent integration |
 | `engramkeep mcp [--status] [--allow-write]` | Run the MCP stdio server, or print its status |
 | `engramkeep dashboard [--status] [--port PORT] [--allow-write]` | Run the local dashboard, or print its status |
 
@@ -311,8 +312,9 @@ The repository ships:
 - [`templates/agents/AGENTS.md`](templates/agents/AGENTS.md)
 - [`templates/rules/`](templates/rules/) for Claude Code, Cursor, Windsurf, and OpenCode
 
-`engramkeep install --agent <name> --apply` does this for you, or you can copy
-the templates manually:
+`engramkeep install --agent <name> --apply` installs the managed instruction
+block (and optional MCP config with `--mcp`). Copy [`skills/engramkeep/SKILL.md`](skills/engramkeep/SKILL.md)
+or rule templates manually if you want the full skill file:
 
 | Agent | Typical target |
 | --- | --- |
@@ -479,7 +481,7 @@ engramkeep/
 │   └── benchmark_fix_registry.py
 ├── skills/engramkeep/SKILL.md
 ├── templates/
-├── tests/                 # 211 tests
+├── tests/                 # 233 tests
 ├── docs/
 └── .github/
 ```

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import stat
 from pathlib import Path
 
 import pytest
@@ -202,3 +203,49 @@ def test_symlink_target_is_refused(tmp_path: Path) -> None:
 
     with pytest.raises(InstallerError):
         run_install("claude-code", tmp_path, dry_run=False)
+    assert outside.read_text(encoding="utf-8") == "# Outside\n"
+
+
+def test_symlink_parent_dir_is_refused(tmp_path: Path) -> None:
+    outside_dir = tmp_path / "outside_dir"
+    outside_dir.mkdir()
+    project_dir = tmp_path / "project"
+    project_dir.mkdir()
+    try:
+        os.symlink(outside_dir, project_dir / ".cursor")
+    except (OSError, NotImplementedError):
+        pytest.skip("symlinks are not available on this platform")
+
+    with pytest.raises(InstallerError):
+        run_install("cursor", tmp_path, dry_run=False)
+    assert not (outside_dir / "rules").exists()
+
+
+def test_unreadable_utf16_target_raises_installer_error(tmp_path: Path) -> None:
+    target = tmp_path / "project" / "CLAUDE.md"
+    target.parent.mkdir(parents=True)
+    target.write_bytes("# UTF-16 rules\n".encode("utf-16"))
+
+    with pytest.raises(InstallerError, match="unreadable file"):
+        run_install("claude-code", tmp_path, dry_run=False)
+
+
+def test_uninstall_removes_file_when_only_managed_block_existed(tmp_path: Path) -> None:
+    run_install("claude-code", tmp_path, dry_run=False)
+    target = tmp_path / "project" / "CLAUDE.md"
+    assert target.is_file()
+
+    result = run_install("claude-code", tmp_path, dry_run=False, remove=True)
+    assert result.operations[0].action == "removed"
+    assert not target.exists()
+
+
+def test_installer_preserves_parent_directory_permissions(tmp_path: Path) -> None:
+    if os.name == "nt":
+        pytest.skip("POSIX directory mode bits do not apply on Windows")
+    expected_mode = stat.S_IRWXU | stat.S_IRGRP | stat.S_IXGRP
+    project_dir = tmp_path / "project"
+    project_dir.mkdir(mode=expected_mode)
+    os.chmod(project_dir, expected_mode)
+    run_install("claude-code", tmp_path, dry_run=False)
+    assert stat.S_IMODE(project_dir.stat().st_mode) == expected_mode

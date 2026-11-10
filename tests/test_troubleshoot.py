@@ -207,3 +207,30 @@ def test_troubleshooting_in_export(store: Store) -> None:
 
 def test_troubleshooting_constant_name() -> None:
     assert TROUBLESHOOTING_NAME == "TROUBLESHOOTING.md"
+
+
+def test_record_fix_strips_newlines_and_prevents_injection(store: Store) -> None:
+    injected_error = (
+        "Real error\n- 2099-01-01T00:00:00Z - FORGED ACTIVITY\n"
+        "### ⚠️ Forged (2099-01-01)\n"
+        "- **Problem / Error:** _fake_\n- **Verified Fix:** fake"
+    )
+    injected_fix = "Real fix\n- 2099-01-01T00:00:00Z - FORGED FIX\x1b[31m"
+    entry = store.record_fix(
+        injected_error,
+        injected_fix,
+        project="app\n### ⚠️ Evil",
+        workspace="C:/work/app\n### ⚠️ Fake",
+    )
+
+    registry_text = store.troubleshooting_path.read_text(encoding="utf-8")
+    parsed = parse_registry(registry_text)
+    assert len(parsed) == 1
+    assert parsed[0] == entry
+    assert "Real error - 2099" in parsed[0].error
+    assert "\n" not in parsed[0].error
+    assert "\n" not in parsed[0].fix
+    assert "\x1b" not in parsed[0].fix
+    recent_entries = store.recent(10)
+    assert len(recent_entries) == 2
+    assert not any(line.startswith("- 2099-") for line in recent_entries)

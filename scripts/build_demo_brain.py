@@ -211,7 +211,7 @@ def build(
         shutil.copytree(
             store.home,
             output,
-            ignore=shutil.ignore_patterns("trash", "__pycache__"),
+            ignore=shutil.ignore_patterns("trash", "__pycache__", ".engramkeep.lock"),
         )
 
     return output

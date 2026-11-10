@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
@@ -186,3 +187,61 @@ def test_recent_activity_is_newest_first(store: Store) -> None:
     recent = store.recent(2)
     assert "two" in recent[0]
     assert "one" in recent[1]
+
+
+def test_concurrent_remember_and_fix_do_not_lose_updates(store: Store) -> None:
+    def _write_decision(index: int) -> None:
+        store.remember("shared-card", f"Decision number {index}", tags=[f"tag-{index % 4}"])
+
+    def _write_fix(index: int) -> None:
+        store.record_fix(
+            f"Concurrent error {index}",
+            f"Concurrent fix {index}",
+            project=f"proj-{index}",
+        )
+
+    with ThreadPoolExecutor(max_workers=12) as pool:
+        futures = [pool.submit(_write_decision, i) for i in range(24)]
+        futures.extend(pool.submit(_write_fix, i) for i in range(12))
+        for future in futures:
+            future.result()
+
+    card = store.get_card("shared-card")
+    assert card is not None
+    for i in range(24):
+        assert f"- Decision number {i}" in card.body
+    assert len(store.search_fixes(None, limit=50)) == 12
+
+
+def test_index_escapes_markdown_link_characters(store: Store) -> None:
+    store.remember("demo", "Keep index safe")
+    card = store.get_card("demo")
+    assert card is not None
+    card.title = "Evil](https://evil.example) [x"
+    store.save_card(card)
+    store.reindex()
+    index_text = store.index_path.read_text(encoding="utf-8")
+    assert "Evil\\](https://evil.example) \\[x" in index_text
+
+
+def test_remember_strips_terminal_control_characters(store: Store) -> None:
+    store.remember("demo", "Safe \x1b[31mred\x1b[0m decision\x07")
+    card = store.get_card("demo")
+    assert card is not None
+    assert "\x1b" not in card.body
+    assert "\x07" not in card.body
+    assert "Safe [31mred[0m decision" in card.body
+
+
+def test_symlinked_projects_dir_is_refused(tmp_path: Path) -> None:
+    home = tmp_path / "brain"
+    outside = tmp_path / "outside"
+    home.mkdir()
+    outside.mkdir()
+    try:
+        os.symlink(outside, home / "projects")
+    except (OSError, NotImplementedError):
+        pytest.skip("symlinks are not available in this environment")
+    store = Store(home)
+    with pytest.raises(StoreError):
+        store.init()

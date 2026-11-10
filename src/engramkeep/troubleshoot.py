@@ -17,11 +17,13 @@ from dataclasses import dataclass
 from typing import Literal
 
 from .concepts import expand_query_terms
+from .paths import strip_control_chars
 
 TROUBLESHOOTING_NAME = "TROUBLESHOOTING.md"
 REGISTRY_TITLE = "# Engramkeep Troubleshooting Registry"
 _EMPTY_NOTE = "_No troubleshooting entries recorded yet._\n"
 _HEADER_PREFIX = "### ⚠️ "
+_HEADER_SPLIT_RE = re.compile(r"(?m)^" + re.escape(_HEADER_PREFIX))
 _WORKSPACE_RE = re.compile(r"(?i)^- \*\*(workspace|çalışma alanı):\*\*\s*`?([^`\n]+?)`?\s*$")
 _ERROR_RE = re.compile(r"(?i)^- \*\*(problem\s*/\s*error|karşılaşılan problem):\*\*\s*_(.+)_\s*$")
 _FIX_RE = re.compile(r"(?i)^- \*\*(verified fix|uygulanan çözüm):\*\*\s*(.+)$")
@@ -104,7 +106,7 @@ def render_entry(entry: TroubleEntry) -> str:
 def parse_registry(text: str) -> list[TroubleEntry]:
     """Parse entries from registry text. Tolerates unknown blocks."""
     entries: list[TroubleEntry] = []
-    for block in text.split(_HEADER_PREFIX)[1:]:
+    for block in _HEADER_SPLIT_RE.split(text)[1:]:
         lines = block.splitlines()
         if not lines:
             continue
@@ -239,8 +241,11 @@ def normalize_field(
     max_chars: int,
     name: Literal["error", "fix", "project", "workspace"],
 ) -> str:
-    """Coerce and bound a raw registry field. Raises ``ValueError`` when empty."""
-    text = str(value if value is not None else "").strip()
+    """Coerce and bound a raw registry field to one safe line."""
+    raw = strip_control_chars(str(value if value is not None else ""))
+    if name == "workspace":
+        raw = raw.replace("`", "")
+    text = " ".join(raw.split())
     if len(text) > max_chars:
         text = text[:max_chars].rstrip()
     if not text:

@@ -6,11 +6,23 @@ import contextlib
 import os
 import re
 import stat
+import sys
 import tempfile
+import threading
+import time
 import unicodedata
+from collections.abc import Iterator
 from pathlib import Path
 
 from .errors import PathSafetyError, ValidationError
+
+if sys.platform == "win32":
+    import msvcrt
+else:
+    import fcntl
+
+_THREAD_LOCKS_GUARD = threading.Lock()
+_THREAD_LOCKS: dict[str, threading.RLock] = {}
 
 _WINDOWS_RESERVED = {
     "CON",
@@ -108,6 +120,18 @@ def display_title(project_id: str) -> str:
     return " ".join(words) or project_id
 
 
+def strip_control_chars(text: str, *, preserve_newlines: bool = False) -> str:
+    """Remove C0/C1/DEL control characters (including ANSI ESC and BEL)."""
+    out: list[str] = []
+    for ch in text:
+        code = ord(ch)
+        if ch in ("\n", "\r", "\t"):
+            out.append(ch if preserve_newlines else " ")
+        elif code >= 32 and code != 127 and not 0x80 <= code <= 0x9F:
+            out.append(ch)
+    return "".join(out)
+
+
 def ensure_private_dir(path: Path | str) -> Path:
     """Create a directory tree and best-effort restrict it to the current user."""
     path = Path(path)
@@ -117,12 +141,104 @@ def ensure_private_dir(path: Path | str) -> Path:
     return path
 
 
-def atomic_write_text(path: Path | str, text: str, *, mode: int = 0o600) -> Path:
+def replace_file(src: Path | str, dst: Path | str, *, retries: int = 10) -> None:
+    """Atomically replace ``dst`` with ``src``, retrying transient Windows locks."""
+    src_path = Path(src)
+    dst_path = Path(dst)
+    for attempt in range(retries):
+        try:
+            os.replace(src_path, dst_path)
+            return
+        except PermissionError:
+            if attempt >= retries - 1:
+                raise
+            time.sleep(min(0.05, 0.005 * (attempt + 1)))
+
+
+def _thread_lock_for(key: str) -> threading.RLock:
+    with _THREAD_LOCKS_GUARD:
+        lock = _THREAD_LOCKS.get(key)
+        if lock is None:
+            lock = threading.RLock()
+            _THREAD_LOCKS[key] = lock
+        return lock
+
+
+_LOCK_STATE = threading.local()
+
+
+@contextlib.contextmanager
+def file_lock(lock_path: Path | str, *, timeout: float = 10.0) -> Iterator[None]:
+    """Serialize mutations across threads and processes using an advisory lock."""
+    path = Path(lock_path)
+    if path.is_symlink():
+        raise PathSafetyError(f"refusing to lock through a symlink: {path}")
+    key = os.path.normcase(str(path.resolve()))
+    rlock = _thread_lock_for(key)
+
+    depths: dict[str, int] = getattr(_LOCK_STATE, "depths", {})
+    if not hasattr(_LOCK_STATE, "depths"):
+        _LOCK_STATE.depths = depths
+
+    with rlock:
+        depth = depths.get(key, 0)
+        if depth > 0:
+            depths[key] = depth + 1
+            try:
+                yield
+            finally:
+                depths[key] = depth
+            return
+
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with open(path, "a+b") as handle:
+            if sys.platform == "win32":
+                handle.seek(0, os.SEEK_END)
+                if handle.tell() == 0:
+                    handle.write(b"\0")
+                    handle.flush()
+                deadline = time.monotonic() + timeout
+                while True:
+                    handle.seek(0)
+                    try:
+                        msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+                        break
+                    except OSError:
+                        if time.monotonic() >= deadline:
+                            raise
+                        time.sleep(0.01)
+            else:
+                fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+
+            depths[key] = 1
+            try:
+                yield
+            finally:
+                depths.pop(key, None)
+                if sys.platform == "win32":
+                    with contextlib.suppress(OSError):
+                        handle.seek(0)
+                        msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+                else:
+                    with contextlib.suppress(OSError):
+                        fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+
+
+def atomic_write_text(
+    path: Path | str,
+    text: str,
+    *,
+    mode: int | None = 0o600,
+    private_parent: bool = False,
+) -> Path:
     """Write UTF-8 text atomically using a temporary file and ``os.replace``."""
     path = Path(path)
     if not path.name:
         raise PathSafetyError(f"invalid output path: {path}")
-    ensure_private_dir(path.parent)
+    if private_parent:
+        ensure_private_dir(path.parent)
+    else:
+        path.parent.mkdir(parents=True, exist_ok=True)
 
     descriptor, temporary_name = tempfile.mkstemp(
         prefix=f".{path.name}.", suffix=".tmp", dir=str(path.parent)
@@ -133,11 +249,13 @@ def atomic_write_text(path: Path | str, text: str, *, mode: int = 0o600) -> Path
             handle.write(text)
             handle.flush()
             os.fsync(handle.fileno())
-        with contextlib.suppress(OSError):
-            os.chmod(temporary, mode)
-        os.replace(temporary, path)
-        with contextlib.suppress(OSError):
-            os.chmod(path, mode)
+        if mode is not None:
+            with contextlib.suppress(OSError):
+                os.chmod(temporary, mode)
+        replace_file(temporary, path)
+        if mode is not None:
+            with contextlib.suppress(OSError):
+                os.chmod(path, mode)
     except BaseException:
         with contextlib.suppress(OSError):
             os.unlink(temporary)
@@ -145,18 +263,28 @@ def atomic_write_text(path: Path | str, text: str, *, mode: int = 0o600) -> Path
     return path
 
 
-def append_text(path: Path | str, text: str, *, mode: int = 0o600) -> Path:
+def append_text(
+    path: Path | str,
+    text: str,
+    *,
+    mode: int | None = 0o600,
+    private_parent: bool = True,
+) -> Path:
     """Append UTF-8 text to a regular file, rejecting symlinks."""
     path = Path(path)
     if path.is_symlink():
         raise PathSafetyError(f"refusing to append through a symlink: {path}")
-    ensure_private_dir(path.parent)
+    if private_parent:
+        ensure_private_dir(path.parent)
+    else:
+        path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "a", encoding="utf-8", newline="\n") as handle:
         handle.write(text)
         handle.flush()
         os.fsync(handle.fileno())
-    with contextlib.suppress(OSError):
-        os.chmod(path, mode)
+    if mode is not None:
+        with contextlib.suppress(OSError):
+            os.chmod(path, mode)
     return path
 
 

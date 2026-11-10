@@ -109,3 +109,44 @@ def test_benign_text_is_unchanged() -> None:
 def test_contains_secret_detects_known_value() -> None:
     assert contains_secret("token=" + _github_token()) is True
     assert contains_secret("plain project decision") is False
+
+
+@pytest.mark.parametrize(
+    "secret",
+    [
+        "sk_live_" + "a" * 24,
+        "rk_test_" + "b" * 24,
+        "glpat-" + "c" * 20,
+        "npm_" + "d" * 36,
+        "pypi-" + "e" * 36,
+        "hf_" + "f" * 24,
+        "dop_v1_" + "0" * 64,
+        "GOCSPX-" + "g" * 24,
+        "123456789:AA" + "h" * 33,
+        "https://hooks.slack.com/services/T11111111/B22222222/" + "j" * 24,
+        "https://discord.com/api/webhooks/123456789012345678/" + "k" * 32,
+    ],
+)
+def test_extended_provider_tokens_and_webhooks_are_redacted(secret: str) -> None:
+    result = redact_text(f"credential: {secret}")
+    assert secret not in result
+    assert REDACTED in result
+    assert redact_text(result) == result
+
+
+def test_quoted_spaces_azure_and_url_credentials_are_redacted() -> None:
+    quoted = 'password = "correct horse battery staple"'
+    quoted_out = redact_text(quoted)
+    assert "correct horse" not in quoted_out
+    assert 'password = "[REDACTED]"' == quoted_out
+    assert redact_text(quoted_out) == quoted_out
+
+    azure = "DefaultEndpointsProtocol=https;AccountName=demo;AccountKey=" + "A" * 44 + ";End=core"
+    azure_out = redact_text(azure)
+    assert "A" * 44 not in azure_out
+    assert "AccountKey=[REDACTED];End=core" in azure_out
+
+    db_url = "postgresql://appuser:supersecretpass@db.internal:5432/prod"
+    url_out = redact_text(db_url)
+    assert "supersecretpass" not in url_out
+    assert "postgresql://appuser:[REDACTED]@db.internal:5432/prod" == url_out

@@ -13,6 +13,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Read-only, consent-based transcript adapters (Claude Code JSONL first).
 - Optional embedding-free semantic reranking.
 
+## [0.5.1] - 2026-11-10
+
+### Fixed
+
+- **CI & demo reproducibility:** Track `examples/demo-brain/audit.log` in Git
+  and ignore `.engramkeep.lock` when generating the demo store.
+- **Installer symlink bypass:** Check every path segment from the root before
+  resolving symlinks so symlinked targets or intermediate directories are always
+  refused (`InstallerError`).
+- **Installer safety & encoding:** Do not tighten parent directory permissions
+  (`chmod 0700`) outside the Engramkeep store; raise `InstallerError` on
+  unreadable/non-UTF-8 files; remove installer-created files cleanly on
+  uninstall when no user content remains.
+- **Concurrent store writes:** Serialize mutating operations (`init`, `remember`,
+  `forget`, `reindex`, `record_fix`) with an advisory lock (`file_lock`) and
+  add bounded retry for transient `os.replace` locks on Windows.
+- **Markdown & terminal injection:** Collapse newlines and strip terminal
+  control characters in `troubleshoot.normalize_field`, card titles, and
+  decisions; split registry blocks only at line-start headings; escape `[` and
+  `]` in `INDEX.md` links; refuse symlinked `projects/` and `trash/` dirs.
+- **Card search word boundaries:** Apply word-boundary matching in
+  `search_cards` so `api` no longer matches `capital` and `git` no longer
+  matches `digital`.
+
+### Security
+
+- Expanded best-effort secret redaction (`redact.py`) for Stripe (`sk_live_`/
+  `rk_live_`), GitLab (`glpat-`), npm, PyPI, HuggingFace (`hf_`), DigitalOcean,
+  Google OAuth (`GOCSPX-`), Telegram bot tokens, Slack/Discord webhooks, quoted
+  passwords with spaces, Azure `AccountKey`, and URL basic-auth credentials.
+
 ## [0.5.0] - 2026-11-09
 
 ### Added

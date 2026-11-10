@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
-import os
-from collections.abc import Iterable
+from collections.abc import Iterable, Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -25,8 +25,10 @@ from .paths import (
     atomic_write_text,
     display_title,
     ensure_private_dir,
+    file_lock,
     is_private_path,
     normalize_project_id,
+    replace_file,
     safe_join,
 )
 from .redact import contains_secret, redact_text
@@ -147,6 +149,13 @@ class Store:
         self.recent_path = self.home / RECENT_NAME
         self.audit_path = self.home / AUDIT_NAME
         self.troubleshooting_path = self.home / TROUBLESHOOTING_NAME
+        self.lock_path = self.home / ".engramkeep.lock"
+
+    @contextlib.contextmanager
+    def _write_lock(self) -> Iterator[None]:
+        ensure_private_dir(self.home)
+        with file_lock(self.lock_path):
+            yield
 
     def _read_meta(self) -> dict[str, object]:
         if self.meta_path.is_symlink():
@@ -189,6 +198,10 @@ class Store:
 
     def init(self) -> InitResult:
         """Create the store layout. Safe to call repeatedly."""
+        with self._write_lock():
+            return self._init_locked()
+
+    def _init_locked(self) -> InitResult:
         created: list[Path] = []
         home_existed = self.home.exists()
         projects_existed = self.projects_dir.exists()
@@ -196,6 +209,10 @@ class Store:
 
         try:
             ensure_private_dir(self.home)
+            if self.projects_dir.is_symlink():
+                raise StoreError("refusing to use symlinked projects directory")
+            if self.trash_dir.is_symlink():
+                raise StoreError("refusing to use symlinked trash directory")
             ensure_private_dir(self.projects_dir)
             ensure_private_dir(self.trash_dir)
         except OSError as exc:
@@ -216,7 +233,9 @@ class Store:
                 "schema_version": SCHEMA_VERSION,
                 "created": utc_now_iso(),
             }
-            atomic_write_text(self.meta_path, json.dumps(meta, indent=2) + "\n")
+            atomic_write_text(
+                self.meta_path, json.dumps(meta, indent=2) + "\n", private_parent=True
+            )
             created.append(self.meta_path)
 
         starter_files = (
@@ -230,7 +249,7 @@ class Store:
                 if path.is_symlink():
                     raise StoreError(f"refusing to use symlinked store file: {path}")
                 continue
-            atomic_write_text(path, content)
+            atomic_write_text(path, content, private_parent=True)
             created.append(path)
 
         if created:
@@ -239,6 +258,8 @@ class Store:
         return InitResult(self.home, created, already_initialized)
 
     def _project_path(self, project: str) -> tuple[Path, str]:
+        if self.projects_dir.is_symlink():
+            raise StoreError("refusing to use symlinked projects directory")
         project_id = normalize_project_id(project)
         return safe_join(self.projects_dir, f"{project_id}.md"), project_id
 
@@ -247,7 +268,7 @@ class Store:
         path, project_id = self._project_path(card.id)
         if project_id != card.id:
             raise StoreError("card id does not match its normalized form")
-        atomic_write_text(path, render_card(card))
+        atomic_write_text(path, render_card(card), private_parent=True)
         return path
 
     def get_card(self, project: str) -> Card | None:
@@ -271,8 +292,8 @@ class Store:
         """Read every regular card and collect per-file errors."""
         self.require_initialized()
         result = ScanResult()
-        if not self.projects_dir.is_dir():
-            result.errors.append("projects directory is missing")
+        if self.projects_dir.is_symlink() or not self.projects_dir.is_dir():
+            result.errors.append("projects directory is missing or invalid")
             return result
 
         for path in sorted(self.projects_dir.glob("*.md")):
@@ -306,62 +327,67 @@ class Store:
         cleaned = redact_text(str(decision))
         normalized_tags = normalize_tags(tags)
 
-        card = self.get_card(project_id)
-        created = card is None
-        if card is None:
-            card = new_card(project_id)
+        with self._write_lock():
+            card = self.get_card(project_id)
+            created = card is None
+            if card is None:
+                card = new_card(project_id)
 
-        added = append_decision(card, cleaned)
-        tags_added = add_tags(card, normalized_tags)
-        if added or tags_added or created:
-            self.save_card(card)
-            self._write_index(self.scan_cards().cards)
-            action = "remembered" if added else "updated tags for"
-            self._append_recent(f"{action} **{card.title}** (`{card.id}`)", card.id, card.tags)
-        self._audit(
-            "remember",
-            card.id,
-            {"added": added, "created": created, "tags": list(card.tags)},
-        )
-        return RememberResult(card=card, created=created, added=added, tags_added=tags_added)
+            added = append_decision(card, cleaned)
+            tags_added = add_tags(card, normalized_tags)
+            if added or tags_added or created:
+                self.save_card(card)
+                self._write_index(self.scan_cards().cards)
+                action = "remembered" if added else "updated tags for"
+                self._append_recent(f"{action} **{card.title}** (`{card.id}`)", card.id, card.tags)
+            self._audit(
+                "remember",
+                card.id,
+                {"added": added, "created": created, "tags": list(card.tags)},
+            )
+            return RememberResult(card=card, created=created, added=added, tags_added=tags_added)
 
     def forget(self, project: str) -> bool:
         """Move a card to trash. Returns False when it does not exist."""
         self.require_initialized()
-        path, project_id = self._project_path(project)
-        if not path.exists():
-            return False
-        if path.is_symlink() or not path.is_file():
-            raise StoreError(f"refusing to forget non-regular card: {path.name}")
+        with self._write_lock():
+            if self.trash_dir.is_symlink():
+                raise StoreError("refusing to use symlinked trash directory")
+            path, project_id = self._project_path(project)
+            if not path.exists():
+                return False
+            if path.is_symlink() or not path.is_file():
+                raise StoreError(f"refusing to forget non-regular card: {path.name}")
 
-        stamp = utc_now_iso().replace("-", "").replace(":", "")
-        trash_path = safe_join(self.trash_dir, f"{project_id}-{stamp}.md")
-        counter = 1
-        while trash_path.exists():
-            trash_path = safe_join(self.trash_dir, f"{project_id}-{stamp}-{counter}.md")
-            counter += 1
+            stamp = utc_now_iso().replace("-", "").replace(":", "")
+            trash_path = safe_join(self.trash_dir, f"{project_id}-{stamp}.md")
+            counter = 1
+            while trash_path.exists():
+                trash_path = safe_join(self.trash_dir, f"{project_id}-{stamp}-{counter}.md")
+                counter += 1
 
-        try:
-            os.replace(path, trash_path)
-        except OSError as exc:
-            raise StoreError(f"cannot move {path.name} to trash: {exc}") from exc
+            try:
+                replace_file(path, trash_path)
+            except OSError as exc:
+                raise StoreError(f"cannot move {path.name} to trash: {exc}") from exc
 
-        self._write_index(self.scan_cards().cards)
-        self._append_recent(
-            f"forgot **{display_title(project_id)}** (`{project_id}`)",
-            project_id,
-            [],
-        )
-        self._audit("forget", project_id, {"trashed_as": trash_path.name})
-        return True
+            self._write_index(self.scan_cards().cards)
+            self._append_recent(
+                f"forgot **{display_title(project_id)}** (`{project_id}`)",
+                project_id,
+                [],
+            )
+            self._audit("forget", project_id, {"trashed_as": trash_path.name})
+            return True
 
     def reindex(self) -> ScanResult:
         """Regenerate INDEX.md from the valid cards."""
         self.require_initialized()
-        scan = self.scan_cards()
-        self._write_index(scan.cards)
-        self._audit("reindex", None, {"cards": len(scan.cards), "errors": len(scan.errors)})
-        return scan
+        with self._write_lock():
+            scan = self.scan_cards()
+            self._write_index(scan.cards)
+            self._audit("reindex", None, {"cards": len(scan.cards), "errors": len(scan.errors)})
+            return scan
 
     def recent(self, limit: int = 10) -> list[str]:
         """Return recent activity bullets, newest first."""
@@ -391,7 +417,7 @@ class Store:
         return parse_registry(text)
 
     def _write_troubleshooting(self, entries: list[TroubleEntry]) -> None:
-        atomic_write_text(self.troubleshooting_path, render_registry(entries))
+        atomic_write_text(self.troubleshooting_path, render_registry(entries), private_parent=True)
 
     def record_fix(
         self,
@@ -430,20 +456,21 @@ class Store:
             workspace=clean_workspace,
             date=utc_now_iso()[:10],
         )
-        entries = self._read_troubleshooting()
-        entries.append(entry)
-        self._write_troubleshooting(entries)
-        self._append_recent(
-            f"recorded a fix for **{entry.project}**: {entry.error[:80]}",
-            None,
-            [],
-        )
-        self._audit(
-            "record_fix",
-            entry.project,
-            {"error": entry.error[:120], "workspace": entry.workspace or "General"},
-        )
-        return entry
+        with self._write_lock():
+            entries = self._read_troubleshooting()
+            entries.append(entry)
+            self._write_troubleshooting(entries)
+            self._append_recent(
+                f"recorded a fix for **{entry.project}**: {entry.error[:80]}",
+                None,
+                [],
+            )
+            self._audit(
+                "record_fix",
+                entry.project,
+                {"error": entry.error[:120], "workspace": entry.workspace or "General"},
+            )
+            return entry
 
     def search_fixes(self, query: str | None, *, limit: int = 10) -> list[FixHit]:
         """Search the troubleshooting registry, or list the newest entries."""
@@ -542,7 +569,12 @@ class Store:
             "| --- | --- | --- |",
         ]
         for card in ordered:
-            title = card.title.replace("|", "\\|")
+            title = (
+                card.title.replace("\\", "\\\\")
+                .replace("|", "\\|")
+                .replace("[", "\\[")
+                .replace("]", "\\]")
+            )
             tags = ", ".join(card.tags) if card.tags else "-"
             updated = card.updated[:10] if card.updated else "-"
             lines.append(f"| [{title}](projects/{card.id}.md) | {tags} | {updated} |")
@@ -550,11 +582,11 @@ class Store:
         return "\n".join(lines)
 
     def _write_index(self, cards: Iterable[Card]) -> None:
-        atomic_write_text(self.index_path, self._render_index(cards))
+        atomic_write_text(self.index_path, self._render_index(cards), private_parent=True)
 
     def _append_recent(self, message: str, project: str | None, tags: list[str]) -> None:
         if not self.recent_path.exists():
-            atomic_write_text(self.recent_path, "# Recent Activity\n\n")
+            atomic_write_text(self.recent_path, "# Recent Activity\n\n", private_parent=True)
         line = f"- {utc_now_iso()} - {message}"
         if tags:
             line += f"; tags: {', '.join(tags)}"

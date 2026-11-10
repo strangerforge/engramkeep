@@ -29,7 +29,6 @@ _BLOCK_RE = re.compile(
     re.escape(BEGIN_MARKER) + r".*?" + re.escape(END_MARKER),
     re.DOTALL,
 )
-_MULTI_BLANK_RE = re.compile(r"\n{3,}")
 
 Scope = Literal["auto", "global", "project"]
 McpStyle = Literal["servers", "opencode"]
@@ -294,8 +293,25 @@ def format_plan(plan: AgentPlan) -> str:
 
 def _resolve_path(raw: str, *, user_home: Path, project_dir: Path) -> Path:
     if raw == "~" or raw.startswith("~/"):
-        return (user_home / raw[2:]).resolve() if raw != "~" else user_home.resolve()
-    return (project_dir / raw).resolve()
+        base = user_home.expanduser().resolve()
+        rel_str = "" if raw == "~" else raw[2:]
+    else:
+        base = project_dir.expanduser().resolve()
+        rel_str = raw
+
+    if not rel_str:
+        return base
+
+    rel = Path(rel_str)
+    if rel.is_absolute() or ".." in rel.parts:
+        raise InstallerError(f"refusing unsafe target path: {raw!r}")
+
+    current = base
+    for part in rel.parts:
+        current = current / part
+        if current.is_symlink():
+            raise InstallerError(f"refusing to write through a symlink: {current}")
+    return current
 
 
 def _resolve_scope(plan: AgentPlan, scope: Scope) -> Literal["global", "project"]:
@@ -331,13 +347,35 @@ def _ensure_not_symlink(path: Path) -> None:
         raise InstallerError(f"target is a directory, not a file: {path}")
 
 
+def _read_text_utf8(path: Path) -> str:
+    try:
+        return path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        raise InstallerError(f"refusing to edit unreadable file {path}: {exc}") from exc
+
+
+def _strip_managed_block(current: str) -> str:
+    match = _BLOCK_RE.search(current)
+    if not match:
+        return current
+    before = current[: match.start()]
+    after = current[match.end() :]
+    if not before.strip() and not after.strip():
+        return ""
+    if not after.strip():
+        return before.rstrip() + "\n"
+    if not before.strip():
+        return after.lstrip("\r\n")
+    return before.rstrip("\r\n") + "\n\n" + after.lstrip("\r\n")
+
+
 def _apply_block(path: Path, block: str, *, session: _Session) -> tuple[str, str | None]:
     _ensure_not_symlink(path)
     existed = path.exists()
-    current = path.read_text(encoding="utf-8") if existed else ""
+    current = _read_text_utf8(path) if existed else ""
 
     if _BLOCK_RE.search(current):
-        updated = _BLOCK_RE.sub(block, current, count=1)
+        updated = _BLOCK_RE.sub(lambda _: block, current, count=1)
     elif current.strip():
         updated = current.rstrip() + "\n\n" + block + "\n"
     else:
@@ -351,7 +389,7 @@ def _apply_block(path: Path, block: str, *, session: _Session) -> tuple[str, str
         return _dry_run_action(action), None
 
     backup = session.backup(path) if existed else None
-    atomic_write_text(path, updated)
+    atomic_write_text(path, updated, mode=None)
     return action, backup
 
 
@@ -359,20 +397,19 @@ def _remove_block(path: Path, *, session: _Session) -> tuple[str, str | None]:
     _ensure_not_symlink(path)
     if not path.exists():
         return "missing", None
-    current = path.read_text(encoding="utf-8")
+    current = _read_text_utf8(path)
     if not _BLOCK_RE.search(current):
         return "unchanged", None
 
-    updated = _BLOCK_RE.sub("", current)
-    updated = _MULTI_BLANK_RE.sub("\n\n", updated).strip()
-    if updated:
-        updated += "\n"
-
+    updated = _strip_managed_block(current)
     if session.dry_run:
         return _dry_run_action("removed"), None
 
     backup = session.backup(path)
-    atomic_write_text(path, updated)
+    if not updated:
+        path.unlink()
+    else:
+        atomic_write_text(path, updated, mode=None)
     return "removed", backup
 
 
@@ -391,8 +428,8 @@ def _mcp_payload(plan: AgentPlan) -> dict[str, Any]:
 
 def _load_json_object(path: Path) -> dict[str, Any]:
     try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
+        payload = json.loads(_read_text_utf8(path))
+    except json.JSONDecodeError as exc:
         raise InstallerError(f"refusing to edit unreadable JSON in {path}: {exc}") from exc
     if not isinstance(payload, dict):
         raise InstallerError(f"refusing to edit JSON that is not an object: {path}")
@@ -434,7 +471,7 @@ def _apply_mcp(
         section["engramkeep"] = _mcp_payload(plan)
 
     updated = json.dumps(data, ensure_ascii=False, indent=2) + "\n"
-    if existed and updated == path.read_text(encoding="utf-8"):
+    if existed and updated == _read_text_utf8(path):
         return "unchanged", None
 
     action = "updated" if existed else "created"

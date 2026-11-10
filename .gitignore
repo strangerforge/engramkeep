@@ -53,6 +53,7 @@ secrets/
 # Logs
 *.log
 !examples/brain/audit.log
+!examples/demo-brain/audit.log
 
 # OS / editor
 .DS_Store
@@ -64,3 +65,4 @@ desktop.ini
 # Temporary files
 *.tmp
 *.temp
+.engramkeep.lock

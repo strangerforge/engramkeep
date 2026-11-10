@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
 from .errors import CardParseError, ValidationError
-from .paths import display_title, normalize_project_id
+from .paths import display_title, normalize_project_id, strip_control_chars
 
 _TAG_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{0,31}$")
 _DECISION_LIMIT = 4000
@@ -22,7 +22,7 @@ def utc_now_iso() -> str:
 
 def sanitize_title(title: str) -> str:
     """Collapse whitespace and bound a title to one safe line."""
-    cleaned = " ".join(str(title).split())
+    cleaned = " ".join(strip_control_chars(str(title)).split())
     if not cleaned:
         raise ValidationError("title must not be empty")
     if len(cleaned) > _TITLE_LIMIT:
@@ -205,7 +205,7 @@ def append_decision(card: Card, decision: str, *, now: str | None = None) -> boo
     Returns True when a new bullet was added and False when the exact decision
     already exists. The card is modified in place.
     """
-    cleaned = " ".join(str(decision).split())
+    cleaned = " ".join(strip_control_chars(str(decision)).split())
     if not cleaned:
         raise ValidationError("decision must not be empty")
     if len(cleaned) > _DECISION_LIMIT:

@@ -1,11 +1,12 @@
 # Engramkeep
 
 [![CI](https://github.com/strangervibe/engramkeep/actions/workflows/ci.yml/badge.svg)](https://github.com/strangervibe/engramkeep/actions/workflows/ci.yml)
-[![Kapsam: 85%](https://img.shields.io/badge/Coverage-85%25-brightgreen.svg)](docs/BENCHMARK.md)
+[![Kapsam: 85%](https://img.shields.io/badge/Coverage-85%25-brightgreen.svg)](https://github.com/strangervibe/engramkeep/actions/workflows/ci.yml)
+[![Benchmark: 95.6% top-1](https://img.shields.io/badge/Benchmark-95.6%25%20top--1-blue.svg)](docs/BENCHMARK.md)
 [![Lisans: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://www.python.org/)
 [![Bağımlılık: 0](https://img.shields.io/badge/Dependencies-0%20(stdlib)-brightgreen.svg)](pyproject.toml)
-[![MCP](https://img.shields.io/badge/MCP-JSON--RPC%202.0-purple.svg)](#mcp)
+[![MCP: 2025-11-25](https://img.shields.io/badge/MCP-2025--11--25-purple.svg)](#mcp)
 
 **Yapay zeka kod ajanları için yerel-öncelikli, Markdown tabanlı kalıcı hafıza.**
 
@@ -13,7 +14,7 @@ Engramkeep; Codex, Claude Code, OpenCode, Cursor, Windsurf, Gemini CLI,
 Antigravity veya `AGENTS.md` okuyabilen her ajanın aynı proje hafızasını
 kullanmasını sağlar. Yalnızca Python standart kütüphanesiyle çalışır.
 
-> **Durum: 0.5.0 alpha.** Depo, CLI, MCP sunucusu, panel, arıza giderme kayıt
+> **Durum: 0.5.1 alpha.** Depo, CLI, MCP sunucusu, panel, arıza giderme kayıt
 > defteri, çift dilli arama ve yedekli ajan kurulumu çalışıyor. Bulut
 > senkronizasyonu, transkript adaptörleri ve şema geçişleri hâlâ yol
 > haritasında. Bkz. [docs/ROADMAP.md](docs/ROADMAP.md).
@@ -45,7 +46,7 @@ denetlenebilir bir hafıza katmanıdır.
 
 ---
 
-## 0.5.0'da ne çalışıyor?
+## 0.5.1'de ne çalışıyor?
 
 | Alan | Durum |
 | --- | --- |
@@ -54,7 +55,7 @@ denetlenebilir bir hafıza katmanıdır.
 | CLI: `fix` (çözülmüş sorunu kaydet), `fixes` (çözülen sorunları ara) | Çalışıyor |
 | Yazma öncesi sır temizleme | Çalışıyor |
 | Yol geçişi koruması + atomik yazma | Çalışıyor |
-| Linux, macOS ve Windows'ta testler + CI | 211 test, %85 kapsam |
+| Linux, macOS ve Windows'ta testler + CI | 233 test, %85 kapsam |
 | MCP stdio sunucusu | Çalışıyor; varsayılan salt-okunur, yazma opt-in |
 | Web paneli | Çalışıyor; loopback + token, yazma opt-in |
 | Arıza giderme kayıt defteri (`TROUBLESHOOTING.md`) | Çalışıyor; sır temizlemeli, atomik, güvenilmeyen veri |
@@ -289,7 +290,7 @@ python scripts/benchmark_fix_registry.py --output docs/BENCHMARK.md
 | `engramkeep reindex` | `INDEX.md` dosyasını yeniden üretir |
 | `engramkeep doctor [--json]` | Yerel depoyu, kayıt defteri dahil, kontrol eder |
 | `engramkeep path` | Aktif hafıza dizinini yazdırır |
-| `engramkeep install [--list] [--agent AD] [--apply] [--uninstall] [--scope auto\|global\|project] [--mcp]` | Ajan entegrasyonunu planlar veya uygular |
+| `engramkeep install [--list] [--agent AD] [--apply] [--uninstall] [--scope auto\|global\|project] [--project-dir YOL] [--mcp]` | Ajan entegrasyonunu planlar veya uygular |
 | `engramkeep mcp [--status] [--allow-write]` | MCP stdio sunucusunu çalıştırır veya durumunu yazdırır |
 | `engramkeep dashboard [--status] [--port PORT] [--allow-write]` | Yerel paneli çalıştırır veya durumunu yazdırır |
 
@@ -308,8 +309,9 @@ Depoda hazır şablonlar var:
 - [`templates/agents/AGENTS.md`](templates/agents/AGENTS.md)
 - [`templates/rules/`](templates/rules/) — Claude Code, Cursor, Windsurf, OpenCode
 
-`engramkeep install --agent <ad> --apply` bunu senin için yapar; dilersen
-şablonları elle de kopyalayabilirsin:
+`engramkeep install --agent <ad> --apply` yönetilen talimat bloğunu (ve
+`--mcp` ile MCP kaydını) kurar; tam skill dosyası için [`skills/engramkeep/SKILL.md`](skills/engramkeep/SKILL.md)
+veya kural şablonlarını elle kopyalayabilirsin:
 
 | Ajan | Tipik hedef |
 | --- | --- |
@@ -474,7 +476,7 @@ engramkeep/
 │   └── benchmark_fix_registry.py
 ├── skills/engramkeep/SKILL.md
 ├── templates/
-├── tests/                 # 211 test
+├── tests/                 # 233 test
 ├── docs/
 └── .github/
 ```
