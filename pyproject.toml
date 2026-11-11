@@ -41,10 +41,10 @@ dev = [
 engramkeep = "engramkeep.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/strangervibe/engramkeep"
-Documentation = "https://github.com/strangervibe/engramkeep/tree/main/docs"
-Issues = "https://github.com/strangervibe/engramkeep/issues"
-Changelog = "https://github.com/strangervibe/engramkeep/blob/main/CHANGELOG.md"
+Homepage = "https://github.com/strangerforge/engramkeep"
+Documentation = "https://github.com/strangerforge/engramkeep/tree/main/docs"
+Issues = "https://github.com/strangerforge/engramkeep/issues"
+Changelog = "https://github.com/strangerforge/engramkeep/blob/main/CHANGELOG.md"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/engramkeep"]

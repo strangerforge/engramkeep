@@ -1,7 +1,7 @@
 # Launch playbook
 
 This is the plan for the public launch of Engramkeep 0.5.2. It assumes the
-repository is `github.com/strangervibe/engramkeep` and the package is published
+repository is `github.com/strangerforge/engramkeep` and the package is published
 on PyPI as `engramkeep`.
 
 The goal of launch week is not a spike in stars. It is a first group of users
@@ -163,7 +163,7 @@ concrete result worth showing.
 > 254 tests. 85% coverage. 95.6% top-1 on a reproducible EN/TR benchmark.
 >
 > pipx install engramkeep
-> github.com/strangervibe/engramkeep
+> github.com/strangerforge/engramkeep
 
 ### Comment reply: "Why not just use Mem0?"
 

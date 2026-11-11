@@ -1,7 +1,7 @@
 # Engramkeep
 
-[![CI](https://github.com/strangervibe/engramkeep/actions/workflows/ci.yml/badge.svg)](https://github.com/strangervibe/engramkeep/actions/workflows/ci.yml)
-[![Kapsam: 85%](https://img.shields.io/badge/Coverage-85%25-brightgreen.svg)](https://github.com/strangervibe/engramkeep/actions/workflows/ci.yml)
+[![CI](https://github.com/strangerforge/engramkeep/actions/workflows/ci.yml/badge.svg)](https://github.com/strangerforge/engramkeep/actions/workflows/ci.yml)
+[![Kapsam: 85%](https://img.shields.io/badge/Coverage-85%25-brightgreen.svg)](https://github.com/strangerforge/engramkeep/actions/workflows/ci.yml)
 [![Benchmark: 95.6% top-1](https://img.shields.io/badge/Benchmark-95.6%25%20top--1-blue.svg)](docs/BENCHMARK.md)
 [![Lisans: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://www.python.org/)
@@ -23,10 +23,10 @@ kullanmasını sağlar. Yalnızca Python standart kütüphanesiyle çalışır.
 
 ---
 
-![Engramkeep paneli](https://raw.githubusercontent.com/strangervibe/engramkeep/main/assets/dashboard.png)
+![Engramkeep paneli](https://raw.githubusercontent.com/strangerforge/engramkeep/main/assets/dashboard.png)
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/strangervibe/engramkeep/main/assets/demo.gif" alt="Engramkeep demosu: projeler, arama, kartlar, aktivite ve doctor" width="720">
+  <img src="https://raw.githubusercontent.com/strangerforge/engramkeep/main/assets/demo.gif" alt="Engramkeep demosu: projeler, arama, kartlar, aktivite ve doctor" width="720">
 </p>
 
 ---

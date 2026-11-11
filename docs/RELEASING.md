@@ -6,9 +6,9 @@ to PyPI through trusted publishing, and creates a GitHub release.
 
 ## One-time setup
 
-1. Create the GitHub repository `strangervibe/engramkeep` and push `main`.
+1. Create the GitHub repository `strangerforge/engramkeep` and push `main`.
 2. On PyPI, add a **pending trusted publisher** for the `engramkeep` project:
-   - Owner: `strangervibe`
+   - Owner: `strangerforge`
    - Repository: `engramkeep`
    - Workflow: `release.yml`
    - Environment: `pypi`
