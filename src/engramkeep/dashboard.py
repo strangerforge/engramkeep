@@ -142,6 +142,9 @@ class DashboardHandler(BaseHTTPRequestHandler):
         if path == "/style.css":
             self._send_asset(STYLE_CSS, "text/css; charset=utf-8")
             return
+        if path in {"/logo.svg", "/favicon.svg"}:
+            self._send_svg(LOGO_SVG)
+            return
         if path.startswith("/api/"):
             if not self._authorized():
                 return
@@ -497,6 +500,14 @@ class DashboardHandler(BaseHTTPRequestHandler):
     def _send_asset(self, text: str, content_type: str) -> None:
         self._send_bytes(HTTPStatus.OK, text.encode("utf-8"), content_type)
 
+    def _send_svg(self, svg: str) -> None:
+        self._send_bytes(
+            HTTPStatus.OK,
+            svg.encode("utf-8"),
+            "image/svg+xml; charset=utf-8",
+            extra_headers={"Content-Security-Policy": "default-src 'none'"},
+        )
+
     def _send_json(
         self,
         status: int | HTTPStatus,
@@ -644,6 +655,22 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
 
+LOGO_SVG = """\
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <title>Engramkeep</title>
+  <rect width="512" height="512" fill="#f3e9d7"/>
+  <g stroke="#221c15" stroke-width="18" stroke-linecap="round" fill="none">
+    <path d="M277 255 A75 75 0 1 0 259.5 303.2"/>
+    <line x1="127" y1="255" x2="277" y2="255"/>
+    <line x1="322" y1="150" x2="322" y2="330"/>
+    <line x1="322" y1="258" x2="384" y2="182"/>
+  </g>
+  <line x1="322" y1="258" x2="386" y2="330" stroke="#c2543a"
+        stroke-width="18" stroke-linecap="round"/>
+</svg>
+"""
+
+
 INDEX_HTML = """<!doctype html>
 <html lang="en">
 <head>
@@ -651,13 +678,19 @@ INDEX_HTML = """<!doctype html>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="referrer" content="no-referrer">
   <title>Engramkeep</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="stylesheet" href="/style.css">
   <script src="/app.js" defer></script>
 </head>
 <body>
   <header>
-    <h1>Engramkeep</h1>
-    <p class="muted">Local-first project memory, served from 127.0.0.1.</p>
+    <div class="brand">
+      <img class="brand-logo" src="/logo.svg" width="44" height="44" alt="">
+      <div>
+        <h1>Engramkeep</h1>
+        <p class="muted">Local-first project memory, served from 127.0.0.1.</p>
+      </div>
+    </div>
     <p id="status" role="status" aria-live="polite">Loading...</p>
   </header>
   <main>
@@ -1053,6 +1086,27 @@ header {
   border-bottom: 1px solid var(--border);
   margin-bottom: 1.5rem;
   padding-bottom: 1rem;
+}
+
+.brand {
+  align-items: center;
+  display: flex;
+  gap: 0.85rem;
+}
+
+.brand h1 {
+  margin: 0;
+}
+
+.brand p {
+  margin: 0.2rem 0 0;
+}
+
+.brand-logo {
+  border: 1px solid var(--border);
+  border-radius: 0.45rem;
+  display: block;
+  flex-shrink: 0;
 }
 
 h1, h2, h3 {

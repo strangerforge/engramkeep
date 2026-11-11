@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Replaced the project branding with the `ek` monogram logo across `assets/`
+  (`logo.svg`, `logo-dark.svg`, `logo-128.png`, `logo-512.png`, `logo-1024.png`),
+  updated `assets/social-preview.png` (1280×640), added dark/light README logos,
+  and added `/logo.svg` + `/favicon.svg` to the local dashboard.
+
 ### Planned
 
 - Schema migrations.

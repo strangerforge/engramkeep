@@ -44,7 +44,9 @@ not been tested. The benchmark page is the honest answer to "how good is it?".
 
 | Asset | Path | Use |
 | --- | --- | --- |
-| Dashboard screenshot | `assets/dashboard.png` | README, GitHub social preview, posts |
+| Logo (`ek` monogram) | `assets/logo.svg`, `assets/logo-dark.svg`, `assets/logo-*.png` | README, dashboard, avatar, favicons |
+| Social preview banner | `assets/social-preview.png` | GitHub social preview (1280×640) |
+| Dashboard screenshot | `assets/dashboard.png` | README, posts |
 | Demo GIF | `assets/demo.gif` | README, Mastodon/X, dev.to |
 | Benchmark | `docs/BENCHMARK.md` | Comments asking about recall quality |
 | Installer docs | README section | Comments asking about agent setup |
@@ -59,7 +61,7 @@ speed. A terminal recording is more convincing than a polished promo.
 - Description: `Local-first, Markdown-native memory for AI coding agents. Zero runtime dependencies.`
 - Website: the PyPI page or the README.
 - Topics: `ai`, `agents`, `memory`, `mcp`, `markdown`, `local-first`, `python`, `cli`, `developer-tools`.
-- Social preview: `assets/dashboard.png`.
+- Social preview: `assets/social-preview.png`.
 - Enable Discussions. Pin a "Show your setup" thread.
 - Labels: `good first issue`, `bug`, `enhancement`, `docs`, `security`, `question`.
 - Security: private vulnerability reporting on, per `SECURITY.md`.

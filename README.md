@@ -1,3 +1,10 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/strangerforge/engramkeep/main/assets/logo-dark.svg">
+    <img src="https://raw.githubusercontent.com/strangerforge/engramkeep/main/assets/logo.svg" width="112" alt="Engramkeep">
+  </picture>
+</p>
+
 # Engramkeep
 
 [![CI](https://github.com/strangerforge/engramkeep/actions/workflows/ci.yml/badge.svg)](https://github.com/strangerforge/engramkeep/actions/workflows/ci.yml)
@@ -470,7 +477,7 @@ engramkeep/
 │   ├── dashboard.py       # hardened local dashboard
 │   ├── installer.py       # backed-up, managed-block agent installer
 │   └── adapters/          # future transcript adapters
-├── assets/                # dashboard.png, demo.gif
+├── assets/                # logo.svg, logo-dark.svg, logo-*.png, social-preview.png, dashboard.png, demo.gif
 ├── examples/
 │   ├── brain/             # minimal valid store
 │   ├── demo-brain/        # generated synthetic store

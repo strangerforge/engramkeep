@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <title>engramkeep — ek monogramı</title>
+  <rect width="512" height="512" fill="#f3e9d7"/>
+  <g stroke="#221c15" stroke-width="18" stroke-linecap="round" fill="none">
+    <path d="M277 255 A75 75 0 1 0 259.5 303.2"/>
+    <line x1="127" y1="255" x2="277" y2="255"/>
+    <line x1="322" y1="150" x2="322" y2="330"/>
+    <line x1="322" y1="258" x2="384" y2="182"/>
+  </g>
+  <line x1="322" y1="258" x2="386" y2="330" stroke="#c2543a" stroke-width="18" stroke-linecap="round"/>
+</svg>

@@ -1,3 +1,10 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/strangerforge/engramkeep/main/assets/logo-dark.svg">
+    <img src="https://raw.githubusercontent.com/strangerforge/engramkeep/main/assets/logo.svg" width="112" alt="Engramkeep">
+  </picture>
+</p>
+
 # Engramkeep
 
 [![CI](https://github.com/strangerforge/engramkeep/actions/workflows/ci.yml/badge.svg)](https://github.com/strangerforge/engramkeep/actions/workflows/ci.yml)
@@ -465,7 +472,7 @@ engramkeep/
 │   ├── dashboard.py       # sertleştirilmiş yerel panel
 │   ├── installer.py       # yedekli, managed-block ajan kurulumu
 │   └── adapters/          # gelecekteki transkript adaptörleri
-├── assets/                # dashboard.png, demo.gif
+├── assets/                # logo.svg, logo-dark.svg, logo-*.png, social-preview.png, dashboard.png, demo.gif
 ├── examples/
 │   ├── brain/             # minimal geçerli depo
 │   ├── demo-brain/        # üretilmiş sentetik depo

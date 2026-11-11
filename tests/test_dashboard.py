@@ -100,6 +100,8 @@ def test_shell_and_assets_are_safe(store: Store) -> None:
         assert b'<script src="/app.js"' in body
         assert b"<script>" not in body
         assert b"<style" not in body
+        assert b'href="/favicon.svg"' in body
+        assert b'src="/logo.svg"' in body
         assert server.token.encode() not in body
 
         status, headers, body = request(server, "GET", "/app.js")
@@ -111,6 +113,16 @@ def test_shell_and_assets_are_safe(store: Store) -> None:
         status, headers, _ = request(server, "GET", "/style.css")
         assert status == 200
         assert headers["content-type"].startswith("text/css")
+
+        for svg_path in ("/logo.svg", "/favicon.svg"):
+            status, headers, body = request(server, "GET", svg_path)
+            assert status == 200
+            assert headers["content-type"].startswith("image/svg+xml")
+            assert headers["content-security-policy"] == "default-src 'none'"
+            assert headers["x-content-type-options"] == "nosniff"
+            assert b"<svg" in body
+            assert b"<script" not in body.lower()
+            assert b"#c2543a" in body
 
 
 def test_api_requires_the_session_token(store: Store) -> None:
