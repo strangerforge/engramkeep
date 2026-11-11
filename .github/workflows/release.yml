@@ -12,6 +12,7 @@ jobs:
   verify:
     name: Verify before release
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Check out
         uses: actions/checkout@v7
@@ -64,6 +65,7 @@ jobs:
     name: Build distributions
     needs: verify
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Check out
         uses: actions/checkout@v7
@@ -93,6 +95,7 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v')
     needs: build
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     environment:
       name: pypi
       url: https://pypi.org/p/engramkeep
@@ -115,6 +118,7 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v')
     needs: publish
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: write
     steps:

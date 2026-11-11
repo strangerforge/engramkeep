@@ -16,6 +16,7 @@ from engramkeep.paths import (
     is_private_path,
     normalize_project_id,
     safe_join,
+    strip_control_chars,
 )
 
 
@@ -68,6 +69,12 @@ def test_normalize_project_id() -> None:
     assert normalize_project_id("Demo_Project") == "demo-project"
     assert normalize_project_id("v1.2") == "v1-2"
     assert normalize_project_id("  Example  ") == "example"
+    assert normalize_project_id("Işık") == "isik"
+    assert normalize_project_id("Çağrı") == "cagri"
+
+
+def test_strip_control_chars_removes_bidi_and_zero_width() -> None:
+    assert strip_control_chars("Hesap\u202eexe\u200b\u2066") == "Hesapexe"
 
 
 @pytest.mark.parametrize("value", ["", "..", "a/b", "a\\b", "C:name", "CON", "a" * 65])

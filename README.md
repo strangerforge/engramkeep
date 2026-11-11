@@ -15,7 +15,7 @@ Windsurf, Gemini CLI, Antigravity, or anything that can read `AGENTS.md` — the
 same persistent, human-readable project memory. It runs on the Python standard
 library alone.
 
-> **Status: 0.5.1 alpha.** The store, CLI, MCP server, dashboard,
+> **Status: 0.5.2 alpha.** The store, CLI, MCP server, dashboard,
 > troubleshooting registry, bilingual search, and the backed-up agent
 > installer work. Cloud sync, transcript adapters, and schema migrations are
 > still ahead. See [docs/ROADMAP.md](docs/ROADMAP.md).
@@ -47,7 +47,7 @@ own.
 
 ---
 
-## What works in 0.5.1
+## What works in 0.5.2
 
 | Area | Status |
 | --- | --- |
@@ -56,7 +56,7 @@ own.
 | CLI: `fix` (record a solved problem), `fixes` (search solved problems) | Working |
 | Secret redaction before write | Working |
 | Path traversal protection + atomic writes | Working |
-| Tests + CI on Linux, macOS, and Windows | 233 tests, 85% coverage |
+| Tests + CI on Linux, macOS, and Windows | 254 tests, 85% coverage |
 | MCP stdio server | Working; read-only by default, writes opt-in |
 | Web dashboard | Working; loopback + token, writes opt-in |
 | Troubleshooting registry (`TROUBLESHOOTING.md`) | Working; redacted, atomic, untrusted data |
@@ -164,7 +164,7 @@ What it does:
 | Behavior | Detail |
 | --- | --- |
 | Managed blocks | Text is wrapped in `<!-- engramkeep:begin -->` … `<!-- engramkeep:end -->`; re-running updates only that block |
-| Backups | Every modified file is copied to a timestamped `.bak` next to it, and the path is recorded in `manifest.json` |
+| Backups | Every modified file is copied to `<home>/backups/installer/<run>/` with a content hash, and the path is recorded in `manifest.json` |
 | Scopes | `--scope auto` (default; global when documented, otherwise project) or `--scope project --project-dir PATH` |
 | MCP registration | Opt-in with `--mcp`; automatic for Claude Code, OpenCode, and Cursor, skipped with a printed reason elsewhere |
 | Uninstall | `--uninstall` removes only the managed block and leaves the rest of the file intact |
@@ -405,7 +405,7 @@ Different projects approach agent memory from different angles. Here is how Engr
 | **Audit & Versioning** | Native `git diff`, open in any editor | Markdown files + local SQLite DB | Markdown files + binary vector index | Hosted dashboard or DB rows | Full `git diff` |
 | **Security & Redaction** | Built-in secret scrubber (`[REDACTED]`) & path jail | Local file permissions | Local file permissions | Cloud / application-level policy | Manual diligence |
 | **Fix Registry** | Built-in cross-agent troubleshooting catalog (`TROUBLESHOOTING.md`) | No dedicated fix registry | No dedicated fix registry | No dedicated fix registry | Freeform notes |
-| **Agent Installer** | Single command for 10 agents (`--apply` + backups + rollback) | MCP client setup | Hooks / plugin setup | Client SDK integration | Manual copy-pasting |
+| **Agent Installer** | Single command for 10 agents (`--apply` + backups + `--uninstall`) | MCP client setup | Hooks / plugin setup | Client SDK integration | Manual copy-pasting |
 | **Primary focus** | Zero-dep durable project decisions & verified fix recall | Local Markdown knowledge graphs via MCP | Semantic vector search over Markdown | Conversational & user-profile memory | Simple single-agent instructions |
 
 ### Objective differences
@@ -481,7 +481,7 @@ engramkeep/
 │   └── benchmark_fix_registry.py
 ├── skills/engramkeep/SKILL.md
 ├── templates/
-├── tests/                 # 233 tests
+├── tests/                 # 254 tests
 ├── docs/
 └── .github/
 ```

@@ -245,3 +245,8 @@ def test_symlinked_projects_dir_is_refused(tmp_path: Path) -> None:
     store = Store(home)
     with pytest.raises(StoreError):
         store.init()
+
+
+def test_remember_rejects_oversized_decision(store: Store) -> None:
+    with pytest.raises(ValidationError, match="maximum input size"):
+        store.remember("demo", "x" * 262_145)

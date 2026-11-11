@@ -437,3 +437,11 @@ def test_create_server_rejects_an_uninitialized_store(home: Path) -> None:
 def test_create_server_rejects_an_invalid_port(home: Path) -> None:
     with pytest.raises(StoreError, match="port must be between"):
         dashboard.create_server(home, port=70_000)
+
+
+def test_dashboard_server_exclusive_address_flag(store: Store) -> None:
+    import sys
+
+    assert dashboard.DashboardServer.allow_reuse_address is (sys.platform != "win32")
+    with dashboard.create_server(store.home, port=0) as server:
+        assert server.port > 0

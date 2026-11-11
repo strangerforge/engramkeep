@@ -150,3 +150,50 @@ def test_quoted_spaces_azure_and_url_credentials_are_redacted() -> None:
     url_out = redact_text(db_url)
     assert "supersecretpass" not in url_out
     assert "postgresql://appuser:[REDACTED]@db.internal:5432/prod" == url_out
+
+
+@pytest.mark.parametrize(
+    "secret_line",
+    [
+        "SECRET_KEY=django-insecure-1234567890",
+        "AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI123456",
+        "ACCESS_KEY=customaccesskey123",
+        "PRIVATE_KEY=supersecretvalue123",
+        "DB_PASS=hunter2hunter2",
+        "PASS=hunter2hunter2",
+        "auth=supersecretvalue123",
+        "credential=supersecretvalue123",
+        "SharedAccessKey=supersecretvalue123",
+        "Authorization: Basic dXNlcjpwYXNz",
+        "redis://:sifre123@cache:6379",
+        "ya29." + "a0AfH6SMBx" + "c" * 30,
+        "SG." + "a" * 22 + "." + "b" * 43,
+    ],
+)
+def test_audit_discovered_formats_are_redacted(secret_line: str) -> None:
+    result = redact_text(secret_line)
+    assert result != secret_line
+    assert REDACTED in result
+    assert redact_text(result) == result
+
+
+@pytest.mark.parametrize("header", ["PGP PRIVATE KEY BLOCK", "OPENSSH PRIVATE KEY"])
+def test_pgp_and_openssh_private_key_blocks_are_redacted(header: str) -> None:
+    block = f"-----BEGIN {header}-----\nMIIEexample\n-----END {header}-----"
+    result = redact_text(block)
+    assert "MIIEexample" not in result
+    assert result == REDACTED_PRIVATE_KEY
+
+
+def test_benign_partial_words_are_not_redacted() -> None:
+    text = "compass=12345678 bypass=12345678 author=someone"
+    assert redact_text(text) == text
+
+
+def test_private_key_redaction_resists_redos() -> None:
+    import time
+
+    payload = "-----BEGIN " + "PRIVATE KEY" + "-----" + "A" * 60_000
+    started = time.perf_counter()
+    assert redact_text(payload) == payload
+    assert time.perf_counter() - started < 0.5

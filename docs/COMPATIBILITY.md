@@ -98,8 +98,8 @@ button.
 ## Known limitations
 
 - Project ids are ASCII slugs. Non-ASCII names are transliterated or rejected.
-- There is no multi-process write lock. Avoid concurrent writers on the same
-  store.
+- Mutating store operations serialize across threads and processes via an
+  advisory lock (`.engramkeep.lock`), with bounded timeout.
 - There is no encryption at rest. Use full-disk encryption if needed.
 - There is no cloud or Git sync. Back up the directory yourself.
 - Search is keyword-based; it is not semantic or vector search.

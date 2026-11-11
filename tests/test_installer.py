@@ -249,3 +249,14 @@ def test_installer_preserves_parent_directory_permissions(tmp_path: Path) -> Non
     os.chmod(project_dir, expected_mode)
     run_install("claude-code", tmp_path, dry_run=False)
     assert stat.S_IMODE(project_dir.stat().st_mode) == expected_mode
+
+
+def test_uninstall_without_mcp_notes_remaining_mcp_entry(tmp_path: Path) -> None:
+    run_install("claude-code", tmp_path, mcp=True, dry_run=False)
+    mcp_path = tmp_path / "project" / ".mcp.json"
+    assert mcp_path.is_file()
+
+    result = run_install("claude-code", tmp_path, mcp=False, dry_run=False, remove=True)
+    actions = {op.action: op.reason for op in result.operations}
+    assert actions.get("kept") == "MCP entry remains; pass --uninstall --mcp to remove"
+    assert "engramkeep" in json.loads(mcp_path.read_text(encoding="utf-8"))["mcpServers"]

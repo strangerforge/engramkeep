@@ -14,7 +14,7 @@ Engramkeep; Codex, Claude Code, OpenCode, Cursor, Windsurf, Gemini CLI,
 Antigravity veya `AGENTS.md` okuyabilen her ajanın aynı proje hafızasını
 kullanmasını sağlar. Yalnızca Python standart kütüphanesiyle çalışır.
 
-> **Durum: 0.5.1 alpha.** Depo, CLI, MCP sunucusu, panel, arıza giderme kayıt
+> **Durum: 0.5.2 alpha.** Depo, CLI, MCP sunucusu, panel, arıza giderme kayıt
 > defteri, çift dilli arama ve yedekli ajan kurulumu çalışıyor. Bulut
 > senkronizasyonu, transkript adaptörleri ve şema geçişleri hâlâ yol
 > haritasında. Bkz. [docs/ROADMAP.md](docs/ROADMAP.md).
@@ -46,7 +46,7 @@ denetlenebilir bir hafıza katmanıdır.
 
 ---
 
-## 0.5.1'de ne çalışıyor?
+## 0.5.2'de ne çalışıyor?
 
 | Alan | Durum |
 | --- | --- |
@@ -55,7 +55,7 @@ denetlenebilir bir hafıza katmanıdır.
 | CLI: `fix` (çözülmüş sorunu kaydet), `fixes` (çözülen sorunları ara) | Çalışıyor |
 | Yazma öncesi sır temizleme | Çalışıyor |
 | Yol geçişi koruması + atomik yazma | Çalışıyor |
-| Linux, macOS ve Windows'ta testler + CI | 233 test, %85 kapsam |
+| Linux, macOS ve Windows'ta testler + CI | 254 test, %85 kapsam |
 | MCP stdio sunucusu | Çalışıyor; varsayılan salt-okunur, yazma opt-in |
 | Web paneli | Çalışıyor; loopback + token, yazma opt-in |
 | Arıza giderme kayıt defteri (`TROUBLESHOOTING.md`) | Çalışıyor; sır temizlemeli, atomik, güvenilmeyen veri |
@@ -163,7 +163,7 @@ Ne yapar:
 | Davranış | Ayrıntı |
 | --- | --- |
 | Managed block | Metin `<!-- engramkeep:begin -->` … `<!-- engramkeep:end -->` arasına yazılır; tekrar çalıştırma yalnızca bu bloğu günceller |
-| Yedekler | Değişen her dosya yanına zaman damgalı `.bak` olarak kopyalanır ve yolu `manifest.json`'a yazılır |
+| Yedekler | Değişen her dosya `<home>/backups/installer/<çalıştırma>/` altına kopyalanır ve yolu `manifest.json`'a yazılır |
 | Kapsam | `--scope auto` (varsayılan; belgelenmişse global, değilse proje) veya `--scope project --project-dir YOL` |
 | MCP kaydı | `--mcp` ile opt-in; Claude Code, OpenCode ve Cursor için otomatik, diğerlerinde gerekçesiyle atlanır |
 | Kaldırma | `--uninstall` yalnızca managed bloğu siler, dosyanın kalanına dokunmaz |
@@ -401,7 +401,7 @@ Farklı projeler yapay zeka ajan hafızasına farklı açılardan yaklaşır. En
 | **Denetim ve Sürümleme** | Doğrudan `git diff`, her editörle açılır | Markdown dosyaları + yerel SQLite DB | Markdown dosyaları + ikili vektör indeksi | Bulut paneli veya DB satırları | Doğrudan `git diff` |
 | **Güvenlik ve Gizlilik** | Otomatik sır temizleme (`[REDACTED]`) ve yol hapsi | Yerel dosya izinleri | Yerel dosya izinleri | Bulut / uygulama politikası | Tamamen manuel dikkat |
 | **Hata Kayıt Defteri** | Dahili, çapraz ajan arıza-çözüm kataloğu (`TROUBLESHOOTING.md`) | Özel arıza kaydı yok | Özel arıza kaydı yok | Özel arıza kaydı yok | Serbest notlar |
-| **Ajan Kurulumu** | 10 ajan için tek komut (`--apply` + yedekleme + geri alma) | MCP istemci kurulumu | Hook / eklenti kurulumu | İstemci SDK entegrasyonu | Manuel kopyala-yapıştır |
+| **Ajan Kurulumu** | 10 ajan için tek komut (`--apply` + yedekleme + `--uninstall`) | MCP istemci kurulumu | Hook / eklenti kurulumu | İstemci SDK entegrasyonu | Manuel kopyala-yapıştır |
 | **Odak noktası** | Sıfır bağımlılıklı proje kararları ve doğrulanmış çözüm kaydı | MCP üzerinden yerel Markdown bilgi grafiği | Markdown üzerinde vektör tabanlı anlamsal arama | Sohbet ve kullanıcı profili hafızası | Tek ajan için basit kural istemi |
 
 ### Teknik ve Objektif Farklar
@@ -476,7 +476,7 @@ engramkeep/
 │   └── benchmark_fix_registry.py
 ├── skills/engramkeep/SKILL.md
 ├── templates/
-├── tests/                 # 233 test
+├── tests/                 # 254 test
 ├── docs/
 └── .github/
 ```

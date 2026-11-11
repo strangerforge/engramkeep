@@ -101,7 +101,7 @@ def normalize_project_id(value: str) -> str:
     if any(char in "/\\:" for char in raw) or ".." in raw:
         raise ValidationError(f"invalid project name: {value!r}")
 
-    transliterated = raw.translate(str.maketrans({"ı": "i", "İ": "I"}))
+    transliterated = raw.translate(str.maketrans("ıİ", "iI"))
     ascii_text = (
         unicodedata.normalize("NFKD", transliterated).encode("ascii", "ignore").decode("ascii")
     )

@@ -549,9 +549,7 @@ def install_agents(
         if not mcp:
             if remove and mcp_raw is not None:
                 try:
-                    mcp_path = _resolve_path(
-                        mcp_raw, user_home=user_home, project_dir=project_dir
-                    )
+                    mcp_path = _resolve_path(mcp_raw, user_home=user_home, project_dir=project_dir)
                     if _has_mcp_entry(mcp_path, plan):
                         session.record(
                             Operation(

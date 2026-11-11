@@ -1,6 +1,6 @@
 # Launch playbook
 
-This is the plan for the public launch of Engramkeep 0.5.1. It assumes the
+This is the plan for the public launch of Engramkeep 0.5.2. It assumes the
 repository is `github.com/strangervibe/engramkeep` and the package is published
 on PyPI as `engramkeep`.
 
@@ -31,7 +31,7 @@ standard library alone. No account, no cloud, no vector database.
 
 **Proof points:**
 
-- 233 tests, 85% coverage, CI on Linux, macOS, and Windows.
+- 254 tests, 85% coverage, CI on Linux, macOS, and Windows.
 - 95.6% top-1 and 100% top-3 on a reproducible 45-query EN/TR benchmark.
 - 100% top-1 for Turkish queries against English entries.
 - Ten supported agents, managed blocks, backups, and reversible uninstall.
@@ -70,7 +70,7 @@ speed. A terminal recording is more convincing than a polished promo.
 
 ### Day -7 to Day -1
 
-- Publish 0.5.1 to PyPI through the release workflow.
+- Publish 0.5.2 to PyPI through the release workflow.
 - Verify a clean install in a fresh environment on Windows, macOS, and Linux.
 - Create the `good first issue` issues from
   [GOOD_FIRST_ISSUES.md](GOOD_FIRST_ISSUES.md).
@@ -160,7 +160,7 @@ concrete result worth showing.
 > - a troubleshooting registry for solved errors
 > - zero runtime dependencies
 >
-> 233 tests. 85% coverage. 95.6% top-1 on a reproducible EN/TR benchmark.
+> 254 tests. 85% coverage. 95.6% top-1 on a reproducible EN/TR benchmark.
 >
 > pipx install engramkeep
 > github.com/strangervibe/engramkeep

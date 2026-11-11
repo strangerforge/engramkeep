@@ -43,20 +43,18 @@ entries, and a negative value, and make the behavior explicit in help text.
 - Done when: every case has a documented and tested result, and the help text
   states the valid range.
 
-## 4. Redact GitLab and Stripe tokens
+## 4. Add `engramkeep install --restore` for backups
 
-**Area:** security · **Difficulty:** medium
+**Area:** installer · **Difficulty:** medium
 
-`redact.py` covers OpenAI, Anthropic, GitHub, Google, AWS, Slack, JWTs, bearer
-tokens, private keys, and email addresses. Add high-confidence patterns for
-GitLab personal access tokens (`glpat-`) and Stripe secret keys (`sk_live_`,
-`sk_test_`).
+`engramkeep install --apply` writes timestamped backups and a `manifest.json`
+under `<home>/backups/installer/<run>/`, and `--uninstall` removes managed
+blocks cleanly. Add a `--restore <run>` option (dry-run by default) to copy
+backed-up files back to their original targets safely.
 
-- Files: `src/engramkeep/redact.py`, `tests/test_redact.py`
-- Done when: synthetic test tokens are replaced, ordinary words containing the
-  same letters are untouched, and the regex uses word boundaries.
-- Note: never commit a real token, even in a test. Build the fixture from
-  string fragments so the hygiene check stays clean.
+- Files: `src/engramkeep/installer.py`, `src/engramkeep/cli.py`, `tests/test_installer.py`
+- Done when: `--restore` previews changes by default, `--apply` restores the
+  recorded backups after symlink/path checks, and tests cover both.
 
 ## 5. Document exit codes
 

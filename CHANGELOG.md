@@ -13,6 +13,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Read-only, consent-based transcript adapters (Claude Code JSONL first).
 - Optional embedding-free semantic reranking.
 
+## [0.5.2] - 2026-11-11
+
+### Security
+
+- **Expanded secret redaction (`redact.py`) and hygiene checks:** Catch
+  `SECRET_KEY`, `AWS_SECRET_ACCESS_KEY`, `ACCESS_KEY`, `PRIVATE_KEY`, `DB_PASS`,
+  `PASS=`, `auth=`, `credential=`, `SharedAccessKey`, `Authorization: Basic/Digest/Token`,
+  empty-user URL credentials (`redis://:pass@host`), Google OAuth (`ya29.`),
+  SendGrid (`SG.`), `PGP PRIVATE KEY BLOCK`, and `OPENSSH PRIVATE KEY`.
+- **ReDoS mitigation & input cap:** Guard `_PRIVATE_KEY` scanning with a fast
+  prefix check and bounded block match (`.{0,20000}?`), and reject decisions
+  exceeding 256 KiB in `Store.remember` before scanning.
+- **Windows loopback binding (`dashboard.py`):** Disable `allow_reuse_address`
+  on Windows and set `SO_EXCLUSIVEADDRUSE` so another local process cannot
+  co-bind the dashboard loopback port.
+- **Unicode Bidi / zero-width sanitization (`paths.py`):** Strip `Cf` format
+  characters (such as `U+202E` and zero-width markers) in `strip_control_chars`.
+
+### Fixed
+
+- **Turkish project slug transliteration (`paths.py`):** Map `ı` → `i` and
+  `İ` → `I` before NFKD folding in `normalize_project_id` (`Işık` → `isik`,
+  `Çağrı` → `cagri`).
+- **POSIX lock timeout symmetry (`paths.py`):** Enforce `timeout` with
+  non-blocking `fcntl.flock(..., LOCK_EX | LOCK_NB)` polling to match Windows.
+- **Installer uninstall hint (`installer.py`):** Report `kept` when `--uninstall`
+  is run without `--mcp` and an MCP entry still exists, instead of leaving users
+  without a notice.
+- **Docs, rules, and CI timeouts:** Sync `templates/rules/*` with `fix`/`fixes`,
+  fix `.bak`/rollback claims in READMEs, update `docs/COMPATIBILITY.md`,
+  `docs/THREAT_MODEL.md`, and `docs/GOOD_FIRST_ISSUES.md`, and add
+  `timeout-minutes` to GitHub Actions jobs.
+
 ## [0.5.1] - 2026-11-10
 
 ### Fixed
