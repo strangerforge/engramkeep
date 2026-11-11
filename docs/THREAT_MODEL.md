@@ -1,7 +1,7 @@
 # Threat model
 
 This document describes the security assumptions and known limitations of
-Engramkeep 0.5.2. It is intentionally conservative.
+Engramkeep 0.5.3. It is intentionally conservative.
 
 ## Assets
 
@@ -20,12 +20,12 @@ Engramkeep 0.5.2. It is intentionally conservative.
    privileges. A local attacker or malware with the same privileges is outside
    the model.
 4. **MCP client and browser -> store.** The MCP stdio server and the
-   loopback dashboard both exist in 0.5.2. MCP is read-only by default; the
+   loopback dashboard both exist in 0.5.3. MCP is read-only by default; the
    dashboard is read-only by default and requires a per-session token.
 
 ## Threats and mitigations
 
-| Threat | Mitigation in 0.5.2 | Residual risk |
+| Threat | Mitigation in 0.5.3 | Residual risk |
 | --- | --- | --- |
 | Path traversal through a project name | `normalize_project_id()` rejects separators, drive letters, control characters, and traversal; `safe_join()` proves containment | A bug in a future caller could bypass the helper |
 | Symlink escape | `safe_join()` resolves symlinks; card scanning rejects symlinks; `append_text()` rejects symlinks | Junction behavior on some Windows versions is not exhaustively tested |

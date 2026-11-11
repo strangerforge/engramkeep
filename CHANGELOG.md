@@ -13,6 +13,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Read-only, consent-based transcript adapters (Claude Code JSONL first).
 - Optional embedding-free semantic reranking.
 
+## [0.5.3] - 2026-11-11
+
+### Changed
+
+- Updated repository, documentation, badge, issue-template, and PyPI package
+  metadata links to `strangerforge/engramkeep`.
+- Updated the repository social preview badge to `v0.5.3`.
+
 ## [0.5.2] - 2026-11-11
 
 ### Security

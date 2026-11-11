@@ -15,7 +15,7 @@ Windsurf, Gemini CLI, Antigravity, or anything that can read `AGENTS.md` — the
 same persistent, human-readable project memory. It runs on the Python standard
 library alone.
 
-> **Status: 0.5.2 alpha.** The store, CLI, MCP server, dashboard,
+> **Status: 0.5.3 alpha.** The store, CLI, MCP server, dashboard,
 > troubleshooting registry, bilingual search, and the backed-up agent
 > installer work. Cloud sync, transcript adapters, and schema migrations are
 > still ahead. See [docs/ROADMAP.md](docs/ROADMAP.md).
@@ -47,7 +47,7 @@ own.
 
 ---
 
-## What works in 0.5.2
+## What works in 0.5.3
 
 | Area | Status |
 | --- | --- |

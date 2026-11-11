@@ -14,7 +14,7 @@ Engramkeep; Codex, Claude Code, OpenCode, Cursor, Windsurf, Gemini CLI,
 Antigravity veya `AGENTS.md` okuyabilen her ajanın aynı proje hafızasını
 kullanmasını sağlar. Yalnızca Python standart kütüphanesiyle çalışır.
 
-> **Durum: 0.5.2 alpha.** Depo, CLI, MCP sunucusu, panel, arıza giderme kayıt
+> **Durum: 0.5.3 alpha.** Depo, CLI, MCP sunucusu, panel, arıza giderme kayıt
 > defteri, çift dilli arama ve yedekli ajan kurulumu çalışıyor. Bulut
 > senkronizasyonu, transkript adaptörleri ve şema geçişleri hâlâ yol
 > haritasında. Bkz. [docs/ROADMAP.md](docs/ROADMAP.md).
@@ -46,7 +46,7 @@ denetlenebilir bir hafıza katmanıdır.
 
 ---
 
-## 0.5.2'de ne çalışıyor?
+## 0.5.3'de ne çalışıyor?
 
 | Alan | Durum |
 | --- | --- |

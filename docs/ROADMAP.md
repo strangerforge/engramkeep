@@ -53,7 +53,7 @@ escape, and no mutation on GET.
 Security gate: registry entries are untrusted data, redacted before write, and
 symlinked registry files are refused.
 
-## 0.5.0 - Installer, demo, and benchmark (released; current 0.5.2)
+## 0.5.0 - Installer, demo, and benchmark (released; current 0.5.3)
 
 - [x] Installer that previews, backs up, and updates a managed block for ten
   agents, with `--apply`, `--uninstall`, and `--scope project`.

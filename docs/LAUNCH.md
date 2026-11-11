@@ -1,6 +1,6 @@
 # Launch playbook
 
-This is the plan for the public launch of Engramkeep 0.5.2. It assumes the
+This is the plan for the public launch of Engramkeep 0.5.3. It assumes the
 repository is `github.com/strangerforge/engramkeep` and the package is published
 on PyPI as `engramkeep`.
 
@@ -70,7 +70,7 @@ speed. A terminal recording is more convincing than a polished promo.
 
 ### Day -7 to Day -1
 
-- Publish 0.5.2 to PyPI through the release workflow.
+- Publish 0.5.3 to PyPI through the release workflow.
 - Verify a clean install in a fresh environment on Windows, macOS, and Linux.
 - Create the `good first issue` issues from
   [GOOD_FIRST_ISSUES.md](GOOD_FIRST_ISSUES.md).
