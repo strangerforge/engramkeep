@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from .config import SCHEMA_VERSION
-from .errors import CardParseError, PathSafetyError, StoreError
+from .errors import CardParseError, PathSafetyError, StoreError, ValidationError
 from .models import (
     Card,
     add_tags,
@@ -324,7 +324,10 @@ class Store:
         """Record a durable decision for a project."""
         self.require_initialized()
         project_id = normalize_project_id(project)
-        cleaned = redact_text(str(decision))
+        raw_decision = str(decision)
+        if len(raw_decision) > 262_144:
+            raise ValidationError("decision exceeds maximum input size")
+        cleaned = redact_text(raw_decision)
         normalized_tags = normalize_tags(tags)
 
         with self._write_lock():

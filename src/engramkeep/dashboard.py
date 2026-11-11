@@ -13,6 +13,7 @@ import argparse
 import hmac
 import json
 import secrets
+import socket
 import sys
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -75,7 +76,14 @@ class DashboardServer(ThreadingHTTPServer):
     """A loopback-only HTTP server with a per-session token."""
 
     daemon_threads = True
-    allow_reuse_address = True
+    allow_reuse_address = sys.platform != "win32"
+
+    def server_bind(self) -> None:
+        """Bind exclusively on Windows so another local process cannot hijack the port."""
+        exclusive = getattr(socket, "SO_EXCLUSIVEADDRUSE", None)
+        if sys.platform == "win32" and exclusive is not None:
+            self.socket.setsockopt(socket.SOL_SOCKET, exclusive, 1)
+        super().server_bind()
 
     def __init__(
         self,

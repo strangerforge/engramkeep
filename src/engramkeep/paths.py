@@ -101,7 +101,10 @@ def normalize_project_id(value: str) -> str:
     if any(char in "/\\:" for char in raw) or ".." in raw:
         raise ValidationError(f"invalid project name: {value!r}")
 
-    ascii_text = unicodedata.normalize("NFKD", raw).encode("ascii", "ignore").decode("ascii")
+    transliterated = raw.translate(str.maketrans({"ı": "i", "İ": "I"}))
+    ascii_text = (
+        unicodedata.normalize("NFKD", transliterated).encode("ascii", "ignore").decode("ascii")
+    )
     normalized = re.sub(r"[^a-z0-9]+", "-", ascii_text.lower()).strip("-")
     if not normalized:
         raise ValidationError("project name must contain ASCII letters or digits")
@@ -121,13 +124,18 @@ def display_title(project_id: str) -> str:
 
 
 def strip_control_chars(text: str, *, preserve_newlines: bool = False) -> str:
-    """Remove C0/C1/DEL control characters (including ANSI ESC and BEL)."""
+    """Remove C0/C1/DEL control and format/bidi (Cf) characters."""
     out: list[str] = []
     for ch in text:
         code = ord(ch)
         if ch in ("\n", "\r", "\t"):
             out.append(ch if preserve_newlines else " ")
-        elif code >= 32 and code != 127 and not 0x80 <= code <= 0x9F:
+        elif (
+            code >= 32
+            and code != 127
+            and not 0x80 <= code <= 0x9F
+            and unicodedata.category(ch) != "Cf"
+        ):
             out.append(ch)
     return "".join(out)
 
@@ -208,7 +216,15 @@ def file_lock(lock_path: Path | str, *, timeout: float = 10.0) -> Iterator[None]
                             raise
                         time.sleep(0.01)
             else:
-                fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+                deadline = time.monotonic() + timeout
+                while True:
+                    try:
+                        fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                        break
+                    except BlockingIOError:
+                        if time.monotonic() >= deadline:
+                            raise TimeoutError(f"timed out waiting for lock: {path}") from None
+                        time.sleep(0.01)
 
             depths[key] = 1
             try:

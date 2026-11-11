@@ -436,6 +436,18 @@ def _load_json_object(path: Path) -> dict[str, Any]:
     return payload
 
 
+def _has_mcp_entry(path: Path, plan: AgentPlan) -> bool:
+    if path.is_symlink() or not path.exists():
+        return False
+    try:
+        data = _load_json_object(path)
+    except InstallerError:
+        return False
+    key = "mcp" if plan.mcp_style == "opencode" else "mcpServers"
+    section = data.get(key)
+    return isinstance(section, dict) and "engramkeep" in section
+
+
 def _apply_mcp(
     path: Path,
     plan: AgentPlan,
@@ -533,9 +545,25 @@ def install_agents(
             action, backup = _apply_block(target, _block_for(plan), session=session)
         session.record(Operation(agent=plan.name, target=str(target), action=action, backup=backup))
 
-        if not mcp:
-            continue
         mcp_raw = plan.mcp_global if selected_scope == "global" else plan.mcp_project
+        if not mcp:
+            if remove and mcp_raw is not None:
+                try:
+                    mcp_path = _resolve_path(
+                        mcp_raw, user_home=user_home, project_dir=project_dir
+                    )
+                    if _has_mcp_entry(mcp_path, plan):
+                        session.record(
+                            Operation(
+                                agent=plan.name,
+                                target=str(mcp_path),
+                                action="kept",
+                                reason="MCP entry remains; pass --uninstall --mcp to remove",
+                            )
+                        )
+                except InstallerError:
+                    pass
+            continue
         if mcp_raw is None:
             session.record(
                 Operation(

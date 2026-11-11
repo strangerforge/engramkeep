@@ -14,7 +14,9 @@ REDACTED_EMAIL = "[REDACTED_EMAIL]"
 REDACTED_PRIVATE_KEY = "[REDACTED_PRIVATE_KEY]"
 
 _PRIVATE_KEY = re.compile(
-    r"-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----.*?-----END [A-Z0-9 ]*PRIVATE KEY-----",
+    r"-----BEGIN (?:[A-Z0-9 ]{0,40}PRIVATE KEY(?: BLOCK)?|OPENSSH PRIVATE KEY)-----"
+    r".{0,20000}?"
+    r"-----END (?:[A-Z0-9 ]{0,40}PRIVATE KEY(?: BLOCK)?|OPENSSH PRIVATE KEY)-----",
     re.DOTALL,
 )
 _TOKEN_PATTERNS: tuple[re.Pattern[str], ...] = (
@@ -27,6 +29,8 @@ _TOKEN_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(r"\bhf_[A-Za-z0-9]{20,}\b"),
     re.compile(r"\bdo[opr]_v1_[a-f0-9]{64}\b"),
     re.compile(r"\bGOCSPX-[A-Za-z0-9_-]{20,}\b"),
+    re.compile(r"\bya29\.[A-Za-z0-9_-]{20,}\b"),
+    re.compile(r"\bSG\.[A-Za-z0-9_-]{16,}\.[A-Za-z0-9_-]{16,}\b"),
     re.compile(r"\b[0-9]{8,11}:AA[A-Za-z0-9_-]{33}\b"),
     re.compile(r"\b(?:gh[pousr]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{22,})\b"),
     re.compile(r"\bAIza[0-9A-Za-z_-]{35}\b"),
@@ -36,12 +40,16 @@ _TOKEN_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(r"https://hooks\.slack\.com/services/T[A-Z0-9]+/B[A-Z0-9]+/[A-Za-z0-9]+"),
     re.compile(r"https://discord(?:app)?\.com/api/webhooks/[0-9]+/[A-Za-z0-9_-]+"),
 )
-_BEARER = re.compile(r"(?i)\b(bearer)\s+([A-Za-z0-9._~+/=-]{12,})")
-_KEY_NAMES = (
-    r"[A-Za-z0-9_]*(?:api[_-]?key|account_?key|auth_?token|secret"
-    r"|token|password|passphrase|passwd|pwd)"
+_AUTH_HEADER = re.compile(
+    r"(?i)\b((?:authorization\s*:\s*(?:bearer|basic|digest|token)|bearer))\s+([A-Za-z0-9._~+/=-]{6,})"
 )
-_URL_CREDENTIALS = re.compile(r"\b([A-Za-z][A-Za-z0-9+.-]*://[^:/@\s]+:)([^@\s]+)(@)")
+_KEY_NAMES = (
+    r"(?:[A-Za-z0-9_]*(?:api[_-]?key|access[_-]?key|account_?key|secret[_-]?key"
+    r"|private[_-]?key|shared_?access_?key|auth_?(?:token|key|pass)|credentials?"
+    r"|db_?pass|secret|token|password|passphrase|passwd|pwd)"
+    r"|\b(?:pass|auth))"
+)
+_URL_CREDENTIALS = re.compile(r"\b([A-Za-z][A-Za-z0-9+.-]*://[^:/@\s]*:)([^@\s]+)(@)")
 _QUOTED_ASSIGNMENT = re.compile(rf"(?i)\b({_KEY_NAMES})(\s*[:=]\s*)(['\"])([^'\"\r\n]{{6,}})\3")
 _ASSIGNMENT = re.compile(rf"(?i)\b({_KEY_NAMES})(\s*[:=]\s*)([^\s'\";]{{6,}})")
 _EMAIL = re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b")
@@ -52,13 +60,17 @@ def redact_text(text: str) -> str:
     if not text:
         return text
 
-    result = _PRIVATE_KEY.sub(REDACTED_PRIVATE_KEY, text)
+    result = (
+        _PRIVATE_KEY.sub(REDACTED_PRIVATE_KEY, text)
+        if "PRIVATE KEY" in text and "-----BEGIN " in text
+        else text
+    )
     for pattern in _TOKEN_PATTERNS:
         result = pattern.sub(REDACTED, result)
     result = _URL_CREDENTIALS.sub(
         lambda match: f"{match.group(1)}{REDACTED}{match.group(3)}", result
     )
-    result = _BEARER.sub(lambda match: f"{match.group(1)} {REDACTED}", result)
+    result = _AUTH_HEADER.sub(lambda match: f"{match.group(1)} {REDACTED}", result)
     result = _QUOTED_ASSIGNMENT.sub(
         lambda match: f"{match.group(1)}{match.group(2)}{match.group(3)}{REDACTED}{match.group(3)}",
         result,
