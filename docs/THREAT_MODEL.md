@@ -22,6 +22,11 @@ Engramkeep 0.5.3. It is intentionally conservative.
 4. **MCP client and browser -> store.** The MCP stdio server and the
    loopback dashboard both exist in 0.5.3. MCP is read-only by default; the
    dashboard is read-only by default and requires a per-session token.
+5. **Agent A -> Store -> Agent B (cross-agent & shared store).** Multiple agents
+   can share one local store (or a user may point `--home` at a synced/project
+   directory). A lower-trust or write-enabled agent can persist text that a
+   higher-privilege agent later reads; `--allow-write` should only be granted to
+   trusted agents.
 
 ## Threats and mitigations
 
@@ -35,7 +40,7 @@ Engramkeep 0.5.3. It is intentionally conservative.
 | Local attacker or malware | Files are created with private permissions where the OS supports it; there is no external network surface, and the dashboard is loopback-only | Same-user malware can read the files |
 | Destructive action | `forget` requires `--yes`; cards move to trash instead of being deleted | Trash retains data until manually removed |
 | Unsafe installer | Dry-run by default; `--apply` edits only inside `<!-- engramkeep:begin/end -->` managed blocks, refuses symlinks and unreadable JSON, and creates timestamped backups plus `manifest.json` | A user who deletes the backup directory loses the automatic snapshot |
-| Supply-chain dependency | Zero runtime dependencies; dev dependencies are pinned by range and monitored by Dependabot | Build tooling is still a dependency |
+| Supply-chain dependency | Zero runtime dependencies; dev dependencies use lower version specifiers monitored by Dependabot; GitHub Actions workflows are pinned to 40-char commit SHAs | Build tooling is still a dependency without a full lockfile |
 | Denial of service via huge input | Decision text is capped at 4000 characters (and rejected above 256 KiB before scanning); `_PRIVATE_KEY` scanning is bounded; path components are bounded | Very large hand-written files are not size-limited |
 | Malformed card crashes a command | Parse errors are reported; `doctor` surfaces them | A malformed card is skipped by search/list |
 | Audit log tampering | Append-only by convention; no cryptographic sealing | A local user can edit the file |

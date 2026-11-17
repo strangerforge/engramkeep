@@ -194,7 +194,7 @@ def _cmd_export(args: argparse.Namespace) -> int:
         return 0
 
     output = Path(args.output).expanduser().resolve()
-    if output.exists() and not args.force:
+    if (output.exists() or output.is_symlink()) and not args.force:
         raise StoreError(f"refusing to overwrite {output}; pass --force to replace it")
     atomic_write_text(output, payload)
     print(f"Exported {len(cards)} card(s) to {output}")

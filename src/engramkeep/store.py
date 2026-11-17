@@ -26,10 +26,12 @@ from .paths import (
     display_title,
     ensure_private_dir,
     file_lock,
+    is_link_or_junction,
     is_private_path,
     normalize_project_id,
     replace_file,
     safe_join,
+    strip_control_chars,
 )
 from .redact import contains_secret, redact_text
 from .troubleshoot import (
@@ -158,8 +160,10 @@ class Store:
             yield
 
     def _read_meta(self) -> dict[str, object]:
-        if self.meta_path.is_symlink():
+        if is_link_or_junction(self.meta_path):
             raise StoreError("refusing to read meta.json through a symlink")
+        if self.meta_path.exists() and not self.meta_path.is_file():
+            raise StoreError("refusing to read non-regular meta.json")
         try:
             raw = self.meta_path.read_text(encoding="utf-8")
             data = json.loads(raw)
@@ -209,9 +213,9 @@ class Store:
 
         try:
             ensure_private_dir(self.home)
-            if self.projects_dir.is_symlink():
+            if is_link_or_junction(self.projects_dir):
                 raise StoreError("refusing to use symlinked projects directory")
-            if self.trash_dir.is_symlink():
+            if is_link_or_junction(self.trash_dir):
                 raise StoreError("refusing to use symlinked trash directory")
             ensure_private_dir(self.projects_dir)
             ensure_private_dir(self.trash_dir)
@@ -327,7 +331,8 @@ class Store:
         raw_decision = str(decision)
         if len(raw_decision) > 262_144:
             raise ValidationError("decision exceeds maximum input size")
-        cleaned = redact_text(raw_decision)
+        sanitized = " ".join(strip_control_chars(raw_decision).split())
+        cleaned = redact_text(sanitized)
         normalized_tags = normalize_tags(tags)
 
         with self._write_lock():
@@ -397,8 +402,10 @@ class Store:
         self.require_initialized()
         if limit <= 0 or not self.recent_path.exists():
             return []
-        if self.recent_path.is_symlink():
+        if is_link_or_junction(self.recent_path):
             raise StoreError("refusing to read RECENT_ACTIVITY.md through a symlink")
+        if not self.recent_path.is_file():
+            raise StoreError("refusing to read non-regular RECENT_ACTIVITY.md")
         try:
             lines = self.recent_path.read_text(encoding="utf-8").splitlines()
         except (OSError, UnicodeDecodeError) as exc:

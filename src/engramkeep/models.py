@@ -164,8 +164,8 @@ def parse_card(
     return Card(
         id=project_id,
         title=title,
-        created=data.get("created", ""),
-        updated=data.get("updated", ""),
+        created=strip_control_chars(str(data.get("created", ""))),
+        updated=strip_control_chars(str(data.get("updated", ""))),
         tags=tags,
         body=body.rstrip() + "\n",
     )

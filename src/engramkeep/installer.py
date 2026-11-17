@@ -21,7 +21,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 from .errors import InstallerError
-from .paths import atomic_write_text, ensure_private_dir
+from .paths import atomic_write_text, ensure_private_dir, is_link_or_junction
 
 BEGIN_MARKER = "<!-- engramkeep:begin -->"
 END_MARKER = "<!-- engramkeep:end -->"
@@ -306,11 +306,17 @@ def _resolve_path(raw: str, *, user_home: Path, project_dir: Path) -> Path:
     if rel.is_absolute() or ".." in rel.parts:
         raise InstallerError(f"refusing unsafe target path: {raw!r}")
 
+    base_resolved = base.resolve()
     current = base
     for part in rel.parts:
         current = current / part
-        if current.is_symlink():
+        if is_link_or_junction(current):
             raise InstallerError(f"refusing to write through a symlink: {current}")
+    resolved = current.resolve()
+    try:
+        resolved.relative_to(base_resolved)
+    except ValueError as exc:
+        raise InstallerError(f"refusing unsafe target path outside base: {raw!r}") from exc
     return current
 
 
@@ -341,7 +347,7 @@ def _dry_run_action(action: str) -> str:
 
 
 def _ensure_not_symlink(path: Path) -> None:
-    if path.is_symlink():
+    if is_link_or_junction(path):
         raise InstallerError(f"refusing to write through a symlink: {path}")
     if path.exists() and path.is_dir():
         raise InstallerError(f"target is a directory, not a file: {path}")

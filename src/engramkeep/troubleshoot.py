@@ -161,7 +161,7 @@ def _has_term(text: str, term: str) -> bool:
 
 def score_entry(entry: TroubleEntry, query: str) -> tuple[int, list[str]]:
     """Score an entry against a query. Returns ``(score, matched_query_tokens)``."""
-    query_tokens = set(_tokens(query))
+    query_tokens = list(dict.fromkeys(_tokens(query)))[:64]
     if not query_tokens:
         return 0, []
 
@@ -194,7 +194,7 @@ def score_entry(entry: TroubleEntry, query: str) -> tuple[int, list[str]]:
     # Bilingual expansion: related EN/TR terms add a small bonus and never
     # replace the literal query tokens. Word-boundary matching keeps short
     # terms like "ui" or "db" from matching inside unrelated words.
-    expanded = expand_query_terms(query) - query_tokens
+    expanded = expand_query_terms(query) - set(query_tokens)
     bonus = 0
     for term in expanded:
         pattern = re.compile(r"(?<![\w])" + re.escape(term) + r"(?![\w])")

@@ -76,11 +76,20 @@ def search_cards(
     """Search titles, ids, tags, and bodies, ranked by field weight."""
     limit = max(0, limit)
     tag_filter = normalize_tag(tag) if tag else None
-    tokens = [token for token in re.split(r"\s+", query.lower()) if token]
+    tokens = list(dict.fromkeys(token for token in re.split(r"\s+", query.lower()) if token))[:64]
+    token_patterns = [
+        re.compile(r"(?<![\w])" + re.escape(token) + r"(?![\w])")
+        for token in tokens
+    ]
     # Bilingual (EN/TR) concept expansion. Expanded terms are worth a small
     # bonus only, never replace literal tokens, and cap their total gain so
     # they can recall cross-language cards without drowning real matches.
     expanded_terms = expand_query_terms(query) - set(tokens)
+    expanded_patterns = [
+        re.compile(r"(?<![\w])" + re.escape(term) + r"(?![\w])")
+        for term in sorted(expanded_terms)
+        if term
+    ]
     hits: list[SearchHit] = []
 
     for card in cards:
@@ -94,8 +103,7 @@ def search_cards(
         score = 0
         matched_tokens = 0
 
-        for token in tokens:
-            pattern = re.compile(r"(?<![\w])" + re.escape(token) + r"(?![\w])")
+        for pattern in token_patterns:
             token_score = 0
             if pattern.search(title):
                 token_score += 10
@@ -111,7 +119,7 @@ def search_cards(
                 score += token_score
 
         haystack = f"{title}\n{body}\n{project_id}"
-        bonus = _expansion_bonus(expanded_terms, haystack)
+        bonus = _expansion_bonus(expanded_patterns, haystack)
 
         if tokens and matched_tokens == 0:
             if bonus == 0:
@@ -145,13 +153,10 @@ def search_cards(
     return hits[:limit]
 
 
-def _expansion_bonus(terms: set[str], haystack: str, *, cap: int = 6) -> int:
+def _expansion_bonus(patterns: list[re.Pattern[str]], haystack: str, *, cap: int = 6) -> int:
     """Score expanded EN/TR terms with word-boundary matching."""
     bonus = 0
-    for term in terms:
-        if not term:
-            continue
-        pattern = re.compile(r"(?<![\w])" + re.escape(term) + r"(?![\w])")
+    for pattern in patterns:
         occurrences = len(pattern.findall(haystack))
         if occurrences:
             bonus += min(occurrences, 2)

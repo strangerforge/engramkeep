@@ -160,6 +160,8 @@ class DashboardHandler(BaseHTTPRequestHandler):
             if not self._valid_host():
                 return
             if path.startswith("/api/"):
+                if not self._authorized():
+                    return
                 self._send_method_not_allowed("GET")
             else:
                 self._send_json(HTTPStatus.NOT_FOUND, {"error": "not found"})
@@ -348,6 +350,12 @@ class DashboardHandler(BaseHTTPRequestHandler):
             )
             return
         tag = _first(query, "tag") or None
+        if tag is not None and len(tag) > 64:
+            self._send_json(
+                HTTPStatus.BAD_REQUEST,
+                {"error": "query parameter 'tag' is too long"},
+            )
+            return
         limit = _int_parameter(query, "limit", DEFAULT_LIMIT)
         scan = self.server.store.scan_cards()
         hits = search_cards(scan.cards, text, tag=tag, limit=limit)
@@ -463,7 +471,9 @@ class DashboardHandler(BaseHTTPRequestHandler):
 
     def _authorized(self) -> bool:
         supplied = self.headers.get(TOKEN_HEADER, "")
-        if not supplied or not hmac.compare_digest(supplied, self.server.token):
+        if not supplied or not hmac.compare_digest(
+            supplied.encode("utf-8"), self.server.token.encode("utf-8")
+        ):
             self._send_json(
                 HTTPStatus.UNAUTHORIZED,
                 {"error": "missing or invalid dashboard token"},

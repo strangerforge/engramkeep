@@ -15,7 +15,7 @@ REDACTED_PRIVATE_KEY = "[REDACTED_PRIVATE_KEY]"
 
 _PRIVATE_KEY = re.compile(
     r"-----BEGIN (?:[A-Z0-9 ]{0,40}PRIVATE KEY(?: BLOCK)?|OPENSSH PRIVATE KEY)-----"
-    r".{0,20000}?"
+    r".*?"
     r"-----END (?:[A-Z0-9 ]{0,40}PRIVATE KEY(?: BLOCK)?|OPENSSH PRIVATE KEY)-----",
     re.DOTALL,
 )
@@ -23,6 +23,7 @@ _TOKEN_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(r"\bsk-ant-[A-Za-z0-9_-]{20,}\b"),
     re.compile(r"\bsk-(?:proj-)?[A-Za-z0-9_-]{20,}\b"),
     re.compile(r"\b(?:sk|rk)_(?:live|test)_[A-Za-z0-9]{16,}\b"),
+    re.compile(r"\bwhsec_[A-Za-z0-9]{16,}\b"),
     re.compile(r"\bglpat-[A-Za-z0-9_-]{20,}\b"),
     re.compile(r"\bnpm_[A-Za-z0-9]{30,}\b"),
     re.compile(r"\bpypi-[A-Za-z0-9_-]{30,}\b"),
@@ -34,14 +35,14 @@ _TOKEN_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(r"\b[0-9]{8,11}:AA[A-Za-z0-9_-]{33}\b"),
     re.compile(r"\b(?:gh[pousr]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{22,})\b"),
     re.compile(r"\bAIza[0-9A-Za-z_-]{35}\b"),
-    re.compile(r"\bAKIA[0-9A-Z]{16}\b"),
-    re.compile(r"\bxox[baprs]-[A-Za-z0-9-]{10,}\b"),
+    re.compile(r"\b(?:AKIA|ASIA)[0-9A-Z]{16}\b"),
+    re.compile(r"\bx(?:ox[baprs]|app|oxe)-[A-Za-z0-9-]{10,}\b"),
     re.compile(r"\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b"),
     re.compile(r"https://hooks\.slack\.com/services/T[A-Z0-9]+/B[A-Z0-9]+/[A-Za-z0-9]+"),
     re.compile(r"https://discord(?:app)?\.com/api/webhooks/[0-9]+/[A-Za-z0-9_-]+"),
 )
 _AUTH_HEADER = re.compile(
-    r"(?i)\b((?:authorization\s*:\s*(?:bearer|basic|digest|token)|bearer))\s+([A-Za-z0-9._~+/=-]{6,})"
+    r"(?i)\b((?:authorization\s*:\s*(?:bearer|basic|digest|token|apikey)|bearer))\s+([A-Za-z0-9._~+/=-]{6,})"
 )
 _KEY_NAMES = (
     r"(?:[A-Za-z0-9_]*(?:api[_-]?key|access[_-]?key|account_?key|secret[_-]?key"
@@ -50,8 +51,12 @@ _KEY_NAMES = (
     r"|\b(?:pass|auth))"
 )
 _URL_CREDENTIALS = re.compile(r"\b([A-Za-z][A-Za-z0-9+.-]*://[^:/@\s]*:)([^@\s]+)(@)")
-_QUOTED_ASSIGNMENT = re.compile(rf"(?i)\b({_KEY_NAMES})(\s*[:=]\s*)(['\"])([^'\"\r\n]{{6,}})\3")
-_ASSIGNMENT = re.compile(rf"(?i)\b({_KEY_NAMES})(\s*[:=]\s*)([^\s'\";]{{6,}})")
+_QUOTED_ASSIGNMENT = re.compile(
+    rf"(?i)\b({_KEY_NAMES})(['\"]?\s*[:=]\s*)(['\"])([^'\"\r\n]{{6,}})\3"
+)
+_ASSIGNMENT = re.compile(
+    rf"(?i)\b({_KEY_NAMES})(['\"]?\s*[:=]\s*['\"]?)([^\s'\";\r\n]{{6,}})"
+)
 _EMAIL = re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b")
 
 

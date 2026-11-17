@@ -140,10 +140,32 @@ def strip_control_chars(text: str, *, preserve_newlines: bool = False) -> str:
     return "".join(out)
 
 
+def is_link_or_junction(path: Path | str) -> bool:
+    """Return True when ``path`` is a symlink or Windows NTFS junction/reparse point."""
+    target = Path(path)
+    if target.is_symlink():
+        return True
+    is_junction = getattr(target, "is_junction", None)
+    if callable(is_junction) and is_junction():
+        return True
+    if sys.platform == "win32":
+        try:
+            st = os.lstat(target)
+        except OSError:
+            return False
+        reparse_flag = getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x400)
+        return bool(getattr(st, "st_file_attributes", 0) & reparse_flag)
+    return False
+
+
 def ensure_private_dir(path: Path | str) -> Path:
     """Create a directory tree and best-effort restrict it to the current user."""
     path = Path(path)
+    if is_link_or_junction(path):
+        raise PathSafetyError(f"refusing to create or chmod a symlink/junction: {path}")
     path.mkdir(parents=True, exist_ok=True)
+    if is_link_or_junction(path):
+        raise PathSafetyError(f"refusing to chmod a symlink/junction: {path}")
     with contextlib.suppress(OSError):
         os.chmod(path, 0o700)
     return path
@@ -179,7 +201,7 @@ _LOCK_STATE = threading.local()
 def file_lock(lock_path: Path | str, *, timeout: float = 10.0) -> Iterator[None]:
     """Serialize mutations across threads and processes using an advisory lock."""
     path = Path(lock_path)
-    if path.is_symlink():
+    if is_link_or_junction(path):
         raise PathSafetyError(f"refusing to lock through a symlink: {path}")
     key = os.path.normcase(str(path.resolve()))
     rlock = _thread_lock_for(key)
@@ -199,7 +221,14 @@ def file_lock(lock_path: Path | str, *, timeout: float = 10.0) -> Iterator[None]
             return
 
         path.parent.mkdir(parents=True, exist_ok=True)
-        with open(path, "a+b") as handle:
+        flags = os.O_RDWR | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0)
+        try:
+            fd = os.open(path, flags, 0o600)
+        except OSError as exc:
+            raise PathSafetyError(f"refusing to lock unsafe path: {path}") from exc
+        with os.fdopen(fd, "a+b") as handle:
+            if not stat.S_ISREG(os.fstat(handle.fileno()).st_mode):
+                raise PathSafetyError(f"lock path is not a regular file: {path}")
             if sys.platform == "win32":
                 handle.seek(0, os.SEEK_END)
                 if handle.tell() == 0:
@@ -213,7 +242,7 @@ def file_lock(lock_path: Path | str, *, timeout: float = 10.0) -> Iterator[None]
                         break
                     except OSError:
                         if time.monotonic() >= deadline:
-                            raise
+                            raise TimeoutError(f"timed out waiting for lock: {path}") from None
                         time.sleep(0.01)
             else:
                 deadline = time.monotonic() + timeout
@@ -288,13 +317,21 @@ def append_text(
 ) -> Path:
     """Append UTF-8 text to a regular file, rejecting symlinks."""
     path = Path(path)
-    if path.is_symlink():
+    if is_link_or_junction(path):
         raise PathSafetyError(f"refusing to append through a symlink: {path}")
     if private_parent:
         ensure_private_dir(path.parent)
     else:
         path.parent.mkdir(parents=True, exist_ok=True)
-    with open(path, "a", encoding="utf-8", newline="\n") as handle:
+    flags = os.O_WRONLY | os.O_CREAT | os.O_APPEND | getattr(os, "O_NOFOLLOW", 0)
+    open_mode = mode if mode is not None else 0o600
+    try:
+        fd = os.open(path, flags, open_mode)
+    except OSError as exc:
+        raise PathSafetyError(f"refusing to append to unsafe path: {path}") from exc
+    with os.fdopen(fd, "a", encoding="utf-8", newline="\n") as handle:
+        if not stat.S_ISREG(os.fstat(handle.fileno()).st_mode):
+            raise PathSafetyError(f"refusing to append to non-regular file: {path}")
         handle.write(text)
         handle.flush()
         os.fsync(handle.fileno())
