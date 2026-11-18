@@ -10,6 +10,7 @@ from pathlib import Path
 from . import __version__, dashboard, mcp_server
 from .config import resolve_home
 from .errors import EngramkeepError, InstallerError, StoreError
+from .importer import import_transcript
 from .installer import available_agents, format_plan, install_agents, plan_installation
 from .models import render_card
 from .paths import atomic_write_text
@@ -314,6 +315,36 @@ def _cmd_install(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_import(args: argparse.Namespace) -> int:
+    store = Store(resolve_home(args.home))
+    source_path = Path(args.file).expanduser()
+    result = import_transcript(
+        store,
+        source_path,
+        fmt=args.fmt,
+        project=args.project,
+        limit=args.limit,
+        apply=args.apply,
+    )
+    if args.json:
+        _print_json(result.to_dict())
+        return 0
+
+    print(
+        f"Transcript ({result.format}): {len(result.decisions)} decision(s), "
+        f"{len(result.fixes)} fix(es) for project '{result.project}'"
+    )
+    for dec in result.decisions:
+        print(f"  [decision L{dec.source_line}] {dec.text}")
+    for fx in result.fixes:
+        print(f"  [fix L{fx.source_line}] {fx.error} -> {fx.fix}")
+    if result.applied:
+        print(f"Applied: {result.written_decisions} decision(s), {result.written_fixes} fix(es).")
+    else:
+        print("Dry run: no files were modified. Pass --apply to write.")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     """Build the command-line parser."""
     parser = argparse.ArgumentParser(
@@ -463,6 +494,28 @@ def build_parser() -> argparse.ArgumentParser:
     )
     install.add_argument("--json", action="store_true", help="print JSON")
     install.set_defaults(handler=_cmd_install)
+
+    imp = subparsers.add_parser(
+        "import",
+        help="extract redacted decisions and fixes from a transcript (dry run by default)",
+    )
+    imp.add_argument("--file", required=True, metavar="FILE", help="path to transcript file")
+    imp.add_argument(
+        "--format",
+        dest="fmt",
+        choices=["auto", "claude-jsonl", "text"],
+        default="auto",
+        help="transcript format (default: auto)",
+    )
+    imp.add_argument("--project", default="imported", help="target project (default: imported)")
+    imp.add_argument("--limit", type=int, default=20, help="maximum candidates (default: 20)")
+    imp.add_argument(
+        "--apply",
+        action="store_true",
+        help="write extracted decisions and fixes into the store",
+    )
+    imp.add_argument("--json", action="store_true", help="print JSON")
+    imp.set_defaults(handler=_cmd_import)
 
     return parser
 

@@ -75,3 +75,24 @@ def test_search_cards_uses_word_boundaries() -> None:
     assert search_cards([capital], "git") == []
     hits = search_cards([capital, api_card], "api")
     assert [hit.id for hit in hits] == ["api-gateway"]
+
+
+def test_search_bm25_prefers_rare_term_and_focused_doc() -> None:
+    common_one = _card("alpha", "Use Python for worker jobs")
+    common_two = _card("beta", "Use Python for CLI tooling")
+    rare_focused = _card("gamma", "Use Python with walrus operator")
+    noisy_long = _card(
+        "delta",
+        "Use Python " + " ".join(["extra"] * 40) + " walrus",
+    )
+    hits = search_cards([common_one, common_two, rare_focused, noisy_long], "python walrus")
+    assert [hit.id for hit in hits[:2]] == ["gamma", "delta"]
+    assert hits[0].score > hits[1].score
+
+
+def test_search_quoted_phrase_match() -> None:
+    exact = _card("wal-mode", "Enable sqlite wal mode for concurrent reads")
+    split = _card("other", "SQLite supports many modes including wal")
+    hits = search_cards([split, exact], '"sqlite wal"')
+    assert [hit.id for hit in hits] == ["wal-mode"]
+    assert "sqlite wal" in hits[0].snippet.lower()

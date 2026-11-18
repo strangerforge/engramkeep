@@ -12,6 +12,7 @@ atomically so a crash never leaves a half-written registry.
 
 from __future__ import annotations
 
+import math
 import re
 from dataclasses import dataclass
 from typing import Literal
@@ -206,13 +207,25 @@ def score_entry(entry: TroubleEntry, query: str) -> tuple[int, list[str]]:
     return score, matched
 
 
+def _parse_fix_query(query: str) -> tuple[list[str], list[str]]:
+    phrases = [
+        " ".join(match.lower().split())
+        for match in re.findall(r'"([^"]+)"', query)
+        if match.strip()
+    ]
+    phrases = list(dict.fromkeys(phrases))[:16]
+    unquoted = re.sub(r'"[^"]*"', " ", query)
+    tokens = list(dict.fromkeys(_tokens(unquoted)))[:64]
+    return phrases, tokens
+
+
 def search_entries(
     entries: list[TroubleEntry],
     query: str | None,
     *,
     limit: int = 10,
 ) -> list[FixHit]:
-    """Return entries ranked for a query, or the newest entries without one."""
+    """Return entries ranked by BM25 + phrase match, or the newest entries without a query."""
     limit = max(0, limit)
     if query is None or not query.strip():
         # Entries are stored chronologically; the newest are returned first,
@@ -226,11 +239,112 @@ def search_entries(
             )
         ][:limit]
 
+    if not entries or limit == 0:
+        return []
+
+    phrases, query_tokens = _parse_fix_query(query)
+    if not phrases and not query_tokens:
+        return []
+
+    k1 = 1.5
+    b = 0.75
+    num_docs = len(entries)
+    fields = [
+        (
+            entry.project.lower(),
+            entry.error.lower(),
+            entry.fix.lower(),
+            (entry.workspace or "").lower(),
+        )
+        for entry in entries
+    ]
+    doc_lengths = [
+        max(
+            1.0,
+            3.0 * len(re.findall(r"\w+", proj))
+            + 2.0 * len(re.findall(r"\w+", err))
+            + 1.0 * len(re.findall(r"\w+", fx))
+            + 0.5 * len(re.findall(r"\w+", ws)),
+        )
+        for proj, err, fx, ws in fields
+    ]
+    avgdl = sum(doc_lengths) / num_docs
+
+    token_patterns = [
+        re.compile(r"(?<![\w])" + re.escape(tok) + r"(?![\w])") for tok in query_tokens
+    ]
+    phrase_patterns = [re.compile(r"(?<![\w])" + re.escape(ph) + r"(?![\w])") for ph in phrases]
+
+    df_counts = [
+        sum(
+            1
+            for proj, err, fx, ws in fields
+            if pat.search(proj) or pat.search(err) or pat.search(fx) or pat.search(ws)
+        )
+        for pat in token_patterns
+    ]
+    idfs = [math.log(1.0 + (num_docs - df + 0.5) / (df + 0.5)) for df in df_counts]
+
+    expanded = expand_query_terms(query) - (set(query_tokens) | set(phrases))
+    expanded_patterns = [
+        re.compile(r"(?<![\w])" + re.escape(term) + r"(?![\w])")
+        for term in sorted(expanded)
+        if term
+    ]
+
     scored: list[tuple[int, int, TroubleEntry]] = []
     for index, entry in enumerate(entries):
-        score, matched = score_entry(entry, query)
-        if matched or score > 0:
-            scored.append((score, index, entry))
+        proj, err, fx, ws = fields[index]
+        norm = 1.0 - b + b * (doc_lengths[index] / avgdl)
+        bm25 = 0.0
+        matched_tokens = 0
+
+        for tok, pat, idf in zip(query_tokens, token_patterns, idfs, strict=True):
+            tf = (
+                4.0 * len(pat.findall(proj))
+                + 3.0 * len(pat.findall(err))
+                + 1.5 * len(pat.findall(fx))
+                + 0.75 * len(pat.findall(ws))
+            )
+            if tf > 0.0:
+                matched_tokens += 1
+                spec_bonus = 1.25 if any(ch.isdigit() for ch in tok) else 1.0
+                bm25 += idf * spec_bonus * (tf * (k1 + 1.0)) / (tf + k1 * norm)
+
+        phrase_score = 0.0
+        matched_phrases = 0
+        for p_pat in phrase_patterns:
+            p_tf = (
+                4.0 * len(p_pat.findall(proj))
+                + 3.0 * len(p_pat.findall(err))
+                + 1.5 * len(p_pat.findall(fx))
+            )
+            if p_tf > 0.0:
+                matched_phrases += 1
+                phrase_score += 4.0 + min(p_tf, 4.0)
+
+        if phrase_patterns and not token_patterns and matched_phrases == 0:
+            continue
+
+        haystack = f"{proj}\n{ws}\n{err}\n{fx}"
+        exp_bonus = 0
+        for pat in expanded_patterns:
+            occ = len(pat.findall(haystack))
+            if occ:
+                exp_bonus += min(occ, 2)
+            if exp_bonus >= 6:
+                exp_bonus = 6
+                break
+
+        if matched_tokens == 0 and matched_phrases == 0:
+            if exp_bonus == 0:
+                continue
+            total = float(exp_bonus)
+        else:
+            total = bm25 * 10.0 + phrase_score * 10.0 + matched_tokens * 2.0 + exp_bonus
+
+        scored.append((max(1, round(total * 10)), index, entry))
+
     scored.sort(key=lambda item: (item[0], item[2].date, item[1]), reverse=True)
     return [FixHit(entry=entry, score=score) for score, _, entry in scored[:limit]]
 
