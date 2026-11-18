@@ -67,14 +67,14 @@ symlinked registry files are refused.
 Security gate: every installer change is backed up and reversible; the
 installer never edits a file it cannot parse safely.
 
-## 0.6.0 - Import, search, and migrations
+## 0.6.0 - Import, search, and migrations (current 0.6.0)
 
-- Schema migration framework.
-- Read-only transcript adapters with explicit consent and documented paths
-  (Claude Code JSONL first). Imported text is treated as untrusted.
-- Optional encryption at rest with a user-supplied key.
-- Better search: field weighting, phrase support, and deterministic snippets.
-- Import dry-run that shows exactly what would be written.
+- [ ] Schema migration framework.
+- [x] Read-only transcript adapters with explicit consent and documented paths
+  (Claude Code JSONL and plain text via `engramkeep import`). Imported text is treated as untrusted.
+- [ ] Optional encryption at rest with a user-supplied key.
+- [x] Better search: field-weighted BM25, quoted phrase support, and deterministic snippets.
+- [x] Import dry-run that shows exactly what would be written.
 
 Security gate: imported text is treated as untrusted, encrypted stores never
 write plaintext to disk, and key handling is documented.

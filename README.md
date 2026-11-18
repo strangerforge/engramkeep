@@ -22,10 +22,10 @@ Windsurf, Gemini CLI, Antigravity, or anything that can read `AGENTS.md` — the
 same persistent, human-readable project memory. It runs on the Python standard
 library alone.
 
-> **Status: 0.5.3 alpha.** The store, CLI, MCP server, dashboard,
-> troubleshooting registry, bilingual search, and the backed-up agent
-> installer work. Cloud sync, transcript adapters, and schema migrations are
-> still ahead. See [docs/ROADMAP.md](docs/ROADMAP.md).
+> **Status: 0.6.0 alpha.** The store, CLI (including `import --dry-run`),
+> MCP server, dashboard, troubleshooting registry, BM25 + phrase + bilingual
+> search, and the backed-up agent installer work. Cloud sync, encryption at rest,
+> and schema migrations are still ahead. See [docs/ROADMAP.md](docs/ROADMAP.md).
 
 [Turkish README](README.tr.md)
 
@@ -54,20 +54,21 @@ own.
 
 ---
 
-## What works in 0.5.3
+## What works in 0.6.0
 
 | Area | Status |
 | --- | --- |
 | Markdown store + generated index | Working |
 | CLI: `init`, `remember`, `search`, `show`, `list`, `recent`, `forget`, `export`, `reindex`, `doctor` | Working |
 | CLI: `fix` (record a solved problem), `fixes` (search solved problems) | Working |
+| CLI: `import` (read-only `--dry-run` default, `--apply` opt-in, `claude-jsonl` & `text`) | Working |
 | Secret redaction before write | Working |
 | Path traversal protection + atomic writes | Working |
-| Tests + CI on Linux, macOS, and Windows | 254 tests, 85% coverage |
+| Tests + CI on Linux, macOS, and Windows | 259 tests, 85% coverage |
 | MCP stdio server | Working; read-only by default, writes opt-in |
 | Web dashboard | Working; loopback + token, writes opt-in |
 | Troubleshooting registry (`TROUBLESHOOTING.md`) | Working; redacted, atomic, untrusted data |
-| Bilingual (EN/TR) search expansion | Working; deterministic, word-boundary matched |
+| BM25 + quoted phrase + bilingual (EN/TR) search | Working; deterministic, word-boundary matched |
 | Agent installer | Working; managed blocks, backups, uninstall |
 | Cloud/Git sync | Not included |
 

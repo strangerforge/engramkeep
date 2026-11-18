@@ -7,18 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Planned
+
+- Schema migrations.
+- Optional encryption at rest with a user-supplied key.
+
+## [0.6.0] - 2026-11-18
+
+### Added
+
+- **BM25 + quoted exact phrase search (`search.py`, `troubleshoot.py`):**
+  Upgraded `search_cards` and `search_entries` with field-weighted BM25
+  (`k1=1.5`, `b=0.75`) scoring and quoted `"exact phrase"` matching while
+  keeping zero external dependencies and bilingual EN/TR concept expansion.
+- **Consent-based transcript `import` (`importer.py`, `engramkeep import`):**
+  Added a read-only-by-default (`--dry-run` default, `--apply` opt-in) adapter
+  for `claude-jsonl` and `text` transcripts that redacts secrets before preview
+  or persistence, enforces a 10 MiB file cap, and refuses symlinks.
+
 ### Changed
 
 - Replaced the project branding with the `ek` monogram logo across `assets/`
   (`logo.svg`, `logo-dark.svg`, `logo-128.png`, `logo-512.png`, `logo-1024.png`),
   updated `assets/social-preview.png` (1280×640), added dark/light README logos,
   and added `/logo.svg` + `/favicon.svg` to the local dashboard.
-
-### Planned
-
-- Schema migrations.
-- Read-only, consent-based transcript adapters (Claude Code JSONL first).
-- Optional embedding-free semantic reranking.
+- Hardened store, dashboard, MCP server, and CI checks (`security` audit fixes).
 
 ## [0.5.3] - 2026-11-11
 

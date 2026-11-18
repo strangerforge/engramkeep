@@ -21,10 +21,10 @@ Engramkeep; Codex, Claude Code, OpenCode, Cursor, Windsurf, Gemini CLI,
 Antigravity veya `AGENTS.md` okuyabilen her ajanın aynı proje hafızasını
 kullanmasını sağlar. Yalnızca Python standart kütüphanesiyle çalışır.
 
-> **Durum: 0.5.3 alpha.** Depo, CLI, MCP sunucusu, panel, arıza giderme kayıt
-> defteri, çift dilli arama ve yedekli ajan kurulumu çalışıyor. Bulut
-> senkronizasyonu, transkript adaptörleri ve şema geçişleri hâlâ yol
-> haritasında. Bkz. [docs/ROADMAP.md](docs/ROADMAP.md).
+> **Durum: 0.6.0 alpha.** Depo, CLI (`import --dry-run` dahil), MCP sunucusu,
+> panel, arıza giderme kayıt defteri, BM25 + tam ifade + çift dilli arama ve
+> yedekli ajan kurulumu çalışıyor. Bulut senkronizasyonu, şifreli depolama ve
+> şema geçişleri hâlâ yol haritasında. Bkz. [docs/ROADMAP.md](docs/ROADMAP.md).
 
 [English README](README.md)
 
@@ -53,20 +53,21 @@ denetlenebilir bir hafıza katmanıdır.
 
 ---
 
-## 0.5.3'de ne çalışıyor?
+## 0.6.0'da ne çalışıyor?
 
 | Alan | Durum |
 | --- | --- |
 | Markdown deposu + üretilen indeks | Çalışıyor |
 | CLI: `init`, `remember`, `search`, `show`, `list`, `recent`, `forget`, `export`, `reindex`, `doctor` | Çalışıyor |
 | CLI: `fix` (çözülmüş sorunu kaydet), `fixes` (çözülen sorunları ara) | Çalışıyor |
+| CLI: `import` (varsayılan `--dry-run`, `--apply` onaylı, `claude-jsonl` ve `text`) | Çalışıyor |
 | Yazma öncesi sır temizleme | Çalışıyor |
 | Yol geçişi koruması + atomik yazma | Çalışıyor |
-| Linux, macOS ve Windows'ta testler + CI | 254 test, %85 kapsam |
+| Linux, macOS ve Windows'ta testler + CI | 259 test, %85 kapsam |
 | MCP stdio sunucusu | Çalışıyor; varsayılan salt-okunur, yazma opt-in |
 | Web paneli | Çalışıyor; loopback + token, yazma opt-in |
 | Arıza giderme kayıt defteri (`TROUBLESHOOTING.md`) | Çalışıyor; sır temizlemeli, atomik, güvenilmeyen veri |
-| Çift dilli (EN/TR) arama genişletmesi | Çalışıyor; deterministik, kelime sınırlı eşleşme |
+| BM25 + tam ifade + çift dilli (EN/TR) arama | Çalışıyor; deterministik, kelime sınırlı eşleşme |
 | Ajan kurulumu | Çalışıyor; managed block, yedek, kaldırma |
 | Bulut/Git senkronizasyonu | Kapsam dışı |
 
