@@ -54,9 +54,7 @@ _URL_CREDENTIALS = re.compile(r"\b([A-Za-z][A-Za-z0-9+.-]*://[^:/@\s]*:)([^@\s]+
 _QUOTED_ASSIGNMENT = re.compile(
     rf"(?i)\b({_KEY_NAMES})(['\"]?\s*[:=]\s*)(['\"])([^'\"\r\n]{{6,}})\3"
 )
-_ASSIGNMENT = re.compile(
-    rf"(?i)\b({_KEY_NAMES})(['\"]?\s*[:=]\s*['\"]?)([^\s'\";\r\n]{{6,}})"
-)
+_ASSIGNMENT = re.compile(rf"(?i)\b({_KEY_NAMES})(['\"]?\s*[:=]\s*['\"]?)([^\s'\";\r\n]{{6,}})")
 _EMAIL = re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b")
 
 

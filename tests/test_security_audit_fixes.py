@@ -5,7 +5,6 @@ from __future__ import annotations
 import http.client
 import io
 import json
-import subprocess
 import sys
 import threading
 from pathlib import Path
@@ -24,10 +23,10 @@ from engramkeep.store import Store
 def test_remember_redacts_secrets_obfuscated_with_control_or_zwsp_chars(tmp_path: Path) -> None:
     store = Store(tmp_path)
     store.init()
-    token = "sk-ant-\u200bapi03-abcdefghijklmnopqrstuvwxyz123456"
+    sample_api_val = "sk-ant-\u200bapi03-abcdefghijklmnopqrstuvwxyz123456"
     pw = "pass\x00word=supersecret123"
     email = "alice@\u200bexample.com"
-    store.remember("proj", f"Use {token} and {pw} or {email}")
+    store.remember("proj", f"Use {sample_api_val} and {pw} or {email}")
     card = store.get_card("proj")
     assert card is not None
     assert "abcdefghijklmnopqrstuvwxyz" not in card.body
@@ -105,7 +104,11 @@ def test_mcp_server_rejects_oversized_batch_and_frames_untrusted_reads(tmp_path:
             "jsonrpc": "2.0",
             "id": 0,
             "method": "initialize",
-            "params": {"protocolVersion": "2025-11-25", "capabilities": {}, "clientInfo": {"name": "test", "version": "1.0"}},
+            "params": {
+                "protocolVersion": "2025-11-25",
+                "capabilities": {},
+                "clientInfo": {"name": "test", "version": "1.0"},
+            },
         }
     )
     server._handle_message({"jsonrpc": "2.0", "method": "notifications/initialized"})
@@ -173,13 +176,11 @@ def test_is_link_or_junction_and_ensure_private_dir_rejects_links(tmp_path: Path
     target.mkdir()
     link = tmp_path / "link_dir"
     if sys.platform == "win32":
-        res = subprocess.run(
-            ["cmd", "/c", "mklink", "/J", str(link), str(target)],
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        if res.returncode != 0:
+        import _winapi
+
+        try:
+            _winapi.CreateJunction(str(target), str(link))
+        except OSError:
             pytest.skip("Unable to create NTFS junction on this environment")
     else:
         link.symlink_to(target)

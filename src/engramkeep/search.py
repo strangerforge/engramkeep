@@ -77,10 +77,7 @@ def search_cards(
     limit = max(0, limit)
     tag_filter = normalize_tag(tag) if tag else None
     tokens = list(dict.fromkeys(token for token in re.split(r"\s+", query.lower()) if token))[:64]
-    token_patterns = [
-        re.compile(r"(?<![\w])" + re.escape(token) + r"(?![\w])")
-        for token in tokens
-    ]
+    token_patterns = [re.compile(r"(?<![\w])" + re.escape(token) + r"(?![\w])") for token in tokens]
     # Bilingual (EN/TR) concept expansion. Expanded terms are worth a small
     # bonus only, never replace literal tokens, and cap their total gain so
     # they can recall cross-language cards without drowning real matches.
