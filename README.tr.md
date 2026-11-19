@@ -5,6 +5,10 @@
   </picture>
 </p>
 
+<p align="center">
+  🇬🇧 <a href="./README.md">English</a> · 🇹🇷 <strong>Türkçe</strong>
+</p>
+
 # Engramkeep
 
 [![CI](https://github.com/strangerforge/engramkeep/actions/workflows/ci.yml/badge.svg)](https://github.com/strangerforge/engramkeep/actions/workflows/ci.yml)
@@ -25,8 +29,6 @@ kullanmasını sağlar. Yalnızca Python standart kütüphanesiyle çalışır.
 > panel, arıza giderme kayıt defteri, BM25 + tam ifade + çift dilli arama ve
 > yedekli ajan kurulumu çalışıyor. Bulut senkronizasyonu, şifreli depolama ve
 > şema geçişleri hâlâ yol haritasında. Bkz. [docs/ROADMAP.md](docs/ROADMAP.md).
-
-[English README](README.md)
 
 ---
 

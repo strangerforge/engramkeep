@@ -5,6 +5,10 @@
   </picture>
 </p>
 
+<p align="center">
+  🇬🇧 <strong>English</strong> · 🇹🇷 <a href="./README.tr.md">Türkçe</a>
+</p>
+
 # Engramkeep
 
 [![CI](https://github.com/strangerforge/engramkeep/actions/workflows/ci.yml/badge.svg)](https://github.com/strangerforge/engramkeep/actions/workflows/ci.yml)
@@ -26,8 +30,6 @@ library alone.
 > MCP server, dashboard, troubleshooting registry, BM25 + phrase + bilingual
 > search, and the backed-up agent installer work. Cloud sync, encryption at rest,
 > and schema migrations are still ahead. See [docs/ROADMAP.md](docs/ROADMAP.md).
-
-[Turkish README](README.tr.md)
 
 ---
 
