@@ -93,7 +93,11 @@ def test_initialize_and_tools_list(home: Path) -> None:
         "name": "engramkeep",
         "version": __version__,
     }
-    assert initialized["capabilities"] == {"tools": {"listChanged": False}}
+    assert initialized["capabilities"] == {
+        "tools": {"listChanged": False},
+        "resources": {"subscribe": False, "listChanged": False},
+        "prompts": {"listChanged": False},
+    }
     assert "untrusted" in initialized["instructions"]
 
     tools = {tool["name"]: tool for tool in responses[1]["result"]["tools"]}
@@ -114,11 +118,21 @@ def test_initialize_and_tools_list(home: Path) -> None:
 
 
 def test_initialize_negotiates_protocol_version(home: Path) -> None:
-    request = {
+    # Supported older protocol versions are honored for client compatibility.
+    for supported in ("2024-11-05", "2025-03-26", "2025-06-18", "2025-11-25"):
+        request = {
+            **INITIALIZE,
+            "params": {**INITIALIZE["params"], "protocolVersion": supported},
+        }
+        responses, _ = run_server([request], home=home)
+        assert responses[0]["result"]["protocolVersion"] == supported
+
+    # Unknown protocol versions fall back to the server's latest version.
+    unknown_req = {
         **INITIALIZE,
-        "params": {**INITIALIZE["params"], "protocolVersion": "2024-11-05"},
+        "params": {**INITIALIZE["params"], "protocolVersion": "1999-01-01"},
     }
-    responses, _ = run_server([request], home=home)
+    responses, _ = run_server([unknown_req], home=home)
     assert responses[0]["result"]["protocolVersion"] == mcp_server.MCP_PROTOCOL_VERSION
 
 

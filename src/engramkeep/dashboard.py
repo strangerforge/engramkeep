@@ -2,9 +2,9 @@
 
 The dashboard binds to ``127.0.0.1`` only, requires a per-session token for
 every API call, enforces the same path jail as the CLI, renders card content as
-text, and sends a strict Content-Security-Policy. Mutations are POST-only,
-require an explicit confirmation flag, and are disabled unless the server is
-started with ``--allow-write``.
+text-only DOM nodes, and sends a strict Content-Security-Policy. Mutations are
+POST-only, require an explicit confirmation flag, and are disabled unless the
+server is started with ``--allow-write``.
 """
 
 from __future__ import annotations
@@ -15,6 +15,7 @@ import json
 import secrets
 import socket
 import sys
+import webbrowser
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -22,6 +23,7 @@ from typing import Any, TextIO
 from urllib.parse import parse_qs, unquote, urlsplit
 
 from .config import resolve_home
+from .dashboard_assets import load_asset
 from .errors import EngramkeepError, StoreError, ValidationError
 from .search import search_cards
 from .store import Store
@@ -38,6 +40,11 @@ CSP = (
     "connect-src 'self'; img-src 'self' data:; base-uri 'none'; "
     "form-action 'self'; frame-ancestors 'none'"
 )
+
+LOGO_SVG = load_asset("logo.svg")
+INDEX_HTML = load_asset("index.html")
+APP_JS = load_asset("app.js")
+STYLE_CSS = load_asset("style.css")
 
 
 def status() -> dict[str, str]:
@@ -153,9 +160,9 @@ class DashboardHandler(BaseHTTPRequestHandler):
         self._send_json(HTTPStatus.NOT_FOUND, {"error": "not found"})
 
     def do_POST(self) -> None:
-        """Accept the opt-in remember mutation only."""
+        """Accept opt-in remember and fix mutations only."""
         path = urlsplit(self.path).path
-        if path != "/api/remember":
+        if path not in {"/api/remember", "/api/fixes"}:
             self._drain_body()
             if not self._valid_host():
                 return
@@ -199,6 +206,13 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 {"error": "explicit confirmation is required: set confirm to true"},
             )
             return
+
+        if path == "/api/remember":
+            self._handle_post_remember(body)
+        else:
+            self._handle_post_fix(body)
+
+    def _handle_post_remember(self, body: dict[str, Any]) -> None:
         project = body.get("project")
         decision = body.get("decision")
         tags = body.get("tags", [])
@@ -237,6 +251,52 @@ class DashboardHandler(BaseHTTPRequestHandler):
             self._send_json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": "internal error"})
             return
         self._send_json(HTTPStatus.OK, result.to_dict())
+
+    def _handle_post_fix(self, body: dict[str, Any]) -> None:
+        error_text = body.get("error")
+        solution = body.get("solution")
+        project = body.get("project")
+        workspace = body.get("workspace")
+        if not isinstance(error_text, str) or not error_text.strip() or len(error_text) > 1_000:
+            self._send_json(
+                HTTPStatus.BAD_REQUEST,
+                {"error": "error must be a non-empty string of at most 1000 characters"},
+            )
+            return
+        if not isinstance(solution, str) or not solution.strip() or len(solution) > 2_000:
+            self._send_json(
+                HTTPStatus.BAD_REQUEST,
+                {"error": "solution must be a non-empty string of at most 2000 characters"},
+            )
+            return
+        if project is not None and (not isinstance(project, str) or len(project) > 128):
+            self._send_json(
+                HTTPStatus.BAD_REQUEST,
+                {"error": "project must be a string of at most 128 characters"},
+            )
+            return
+        if workspace is not None and (not isinstance(workspace, str) or len(workspace) > 260):
+            self._send_json(
+                HTTPStatus.BAD_REQUEST,
+                {"error": "workspace must be a string of at most 260 characters"},
+            )
+            return
+
+        try:
+            entry, added = self.server.store.record_fix_result(
+                error_text,
+                solution,
+                project=project,
+                workspace=workspace,
+            )
+        except EngramkeepError as exc:
+            self._send_json(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
+            return
+        except Exception as exc:  # pragma: no cover - defensive boundary
+            self._log_internal_error(exc)
+            self._send_json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": "internal error"})
+            return
+        self._send_json(HTTPStatus.OK, {"fix": entry.to_dict(), "added": added})
 
     def do_OPTIONS(self) -> None:
         """Reject preflight requests; the dashboard has no CORS surface."""
@@ -291,6 +351,9 @@ class DashboardHandler(BaseHTTPRequestHandler):
                     HTTPStatus.OK,
                     {"report": self.server.store.doctor().to_dict()},
                 )
+                return
+            if path == "/api/export":
+                self._send_json(HTTPStatus.OK, self.server.store.export_cards())
                 return
             if path == "/api/remember":
                 self._send_method_not_allowed("POST")
@@ -607,6 +670,7 @@ def serve(
     *,
     port: int = DEFAULT_PORT,
     allow_write: bool = False,
+    open_browser: bool = False,
     stdout: TextIO | None = None,
     stderr: TextIO | None = None,
 ) -> int:
@@ -625,6 +689,8 @@ def serve(
         f"Writes: {'enabled' if allow_write else 'disabled (pass --allow-write to enable)'}",
         file=out,
     )
+    if open_browser:
+        webbrowser.open(server.url)
     print("Press Ctrl+C to stop.", file=out, flush=True)
     try:
         server.serve_forever()
@@ -651,7 +717,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--allow-write",
         action="store_true",
-        help="enable the remember form",
+        help="enable the remember and fix forms",
+    )
+    parser.add_argument(
+        "--open",
+        dest="open_browser",
+        action="store_true",
+        help="open the dashboard URL in the default browser",
     )
     args = parser.parse_args(argv)
     try:
@@ -659,571 +731,11 @@ def main(argv: list[str] | None = None) -> int:
             resolve_home(args.home),
             port=args.port,
             allow_write=args.allow_write,
+            open_browser=args.open_browser,
         )
     except EngramkeepError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
-
-
-LOGO_SVG = """\
-<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
-  <title>Engramkeep</title>
-  <rect width="512" height="512" fill="#f3e9d7"/>
-  <g stroke="#221c15" stroke-width="18" stroke-linecap="round" fill="none">
-    <path d="M277 255 A75 75 0 1 0 259.5 303.2"/>
-    <line x1="127" y1="255" x2="277" y2="255"/>
-    <line x1="322" y1="150" x2="322" y2="330"/>
-    <line x1="322" y1="258" x2="384" y2="182"/>
-  </g>
-  <line x1="322" y1="258" x2="386" y2="330" stroke="#c2543a"
-        stroke-width="18" stroke-linecap="round"/>
-</svg>
-"""
-
-
-INDEX_HTML = """<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="referrer" content="no-referrer">
-  <title>Engramkeep</title>
-  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
-  <link rel="stylesheet" href="/style.css">
-  <script src="/app.js" defer></script>
-</head>
-<body>
-  <header>
-    <div class="brand">
-      <img class="brand-logo" src="/logo.svg" width="44" height="44" alt="">
-      <div>
-        <h1>Engramkeep</h1>
-        <p class="muted">Local-first project memory, served from 127.0.0.1.</p>
-      </div>
-    </div>
-    <p id="status" role="status" aria-live="polite">Loading...</p>
-  </header>
-  <main>
-    <section aria-labelledby="search-heading">
-      <h2 id="search-heading">Search</h2>
-      <form id="search-form">
-        <label for="search-query">Query</label>
-        <input id="search-query" name="q" type="search" required maxlength="2000"
-               autocomplete="off">
-        <label for="search-tag">Tag (optional)</label>
-        <input id="search-tag" name="tag" type="text" maxlength="64" autocomplete="off">
-        <button type="submit">Search</button>
-      </form>
-      <ul id="search-results" class="results"></ul>
-    </section>
-    <section aria-labelledby="projects-heading">
-      <h2 id="projects-heading">Projects</h2>
-      <ul id="project-list" class="results"></ul>
-    </section>
-    <section aria-labelledby="card-heading">
-      <h2 id="card-heading">Card</h2>
-      <div id="card-view" class="card"><p class="muted">Select a project.</p></div>
-    </section>
-    <section aria-labelledby="recent-heading">
-      <h2 id="recent-heading">Recent activity</h2>
-      <ul id="recent-list" class="results"></ul>
-    </section>
-    <section aria-labelledby="fixes-heading">
-      <h2 id="fixes-heading">Troubleshooting fixes</h2>
-      <form id="fixes-form">
-        <label for="fixes-query">Filter fixes (optional)</label>
-        <input id="fixes-query" name="q" type="search" maxlength="2000" autocomplete="off">
-        <button type="submit">Filter</button>
-      </form>
-      <ul id="fixes-list" class="results"></ul>
-    </section>
-    <section aria-labelledby="doctor-heading">
-      <h2 id="doctor-heading">Doctor</h2>
-      <pre id="doctor-view" class="pre"></pre>
-    </section>
-    <section id="remember-section" aria-labelledby="remember-heading" hidden>
-      <h2 id="remember-heading">Remember a decision</h2>
-      <form id="remember-form">
-        <label for="remember-project">Project</label>
-        <input id="remember-project" name="project" type="text" required maxlength="128"
-               autocomplete="off">
-        <label for="remember-decision">Decision</label>
-        <textarea id="remember-decision" name="decision" required maxlength="4000"
-                  rows="5"></textarea>
-        <label for="remember-tags">Tags (comma-separated)</label>
-        <input id="remember-tags" name="tags" type="text" maxlength="400" autocomplete="off">
-        <label class="checkbox">
-          <input id="remember-confirm" type="checkbox" required>
-          I confirm this is a durable decision.
-        </label>
-        <button type="submit">Remember</button>
-      </form>
-    </section>
-  </main>
-  <noscript><p>Engramkeep dashboard requires JavaScript.</p></noscript>
-</body>
-</html>
-"""
-
-
-APP_JS = """(() => {
-  "use strict";
-
-  const TOKEN_KEY = "engramkeep-dashboard-token";
-  const state = { token: null, writes: false };
-
-  function storageGet(key) {
-    try {
-      return sessionStorage.getItem(key);
-    } catch (error) {
-      return null;
-    }
-  }
-
-  function storageSet(key, value) {
-    try {
-      sessionStorage.setItem(key, value);
-    } catch (error) {
-      // The token still works for this page load.
-    }
-  }
-
-  function readToken() {
-    const hash = new URLSearchParams(window.location.hash.slice(1));
-    const fromHash = hash.get("token");
-    if (fromHash) {
-      storageSet(TOKEN_KEY, fromHash);
-      try {
-        history.replaceState(null, "", window.location.pathname + window.location.search);
-      } catch (error) {
-        // Keep the fragment when the browser refuses to rewrite history.
-      }
-      return fromHash;
-    }
-    return storageGet(TOKEN_KEY);
-  }
-
-  function setStatus(message, isError = false) {
-    const node = document.getElementById("status");
-    node.textContent = message;
-    node.classList.toggle("error", isError);
-  }
-
-  async function api(path, options = {}) {
-    if (!state.token) {
-      throw new Error("No dashboard token. Open the URL printed by engramkeep dashboard.");
-    }
-    const headers = new Headers(options.headers || {});
-    headers.set("X-Engramkeep-Token", state.token);
-    if (options.body !== undefined) {
-      headers.set("Content-Type", "application/json");
-    }
-    const response = await fetch(path, { ...options, headers, cache: "no-store" });
-    let data = {};
-    try {
-      data = await response.json();
-    } catch (error) {
-      // Keep the status text when the body is not JSON.
-    }
-    if (!response.ok) {
-      throw new Error(data.error || `${response.status} ${response.statusText}`);
-    }
-    return data;
-  }
-
-  function clear(node) {
-    while (node.firstChild) {
-      node.removeChild(node.firstChild);
-    }
-  }
-
-  function text(tag, value, className) {
-    const node = document.createElement(tag);
-    node.textContent = value;
-    if (className) {
-      node.className = className;
-    }
-    return node;
-  }
-
-  function renderProjects(projects) {
-    const list = document.getElementById("project-list");
-    clear(list);
-    if (!projects.length) {
-      list.appendChild(text("li", "No projects yet.", "muted"));
-      return;
-    }
-    for (const project of projects) {
-      const item = document.createElement("li");
-      const button = document.createElement("button");
-      button.type = "button";
-      button.textContent = project.title;
-      button.addEventListener("click", () => loadCard(project.id));
-      item.appendChild(button);
-      item.appendChild(text("span", ` ${project.id}`, "muted"));
-      if (project.tags.length) {
-        item.appendChild(text("span", ` [${project.tags.join(", ")}]`, "muted"));
-      }
-      list.appendChild(item);
-    }
-  }
-
-  function renderSearch(hits) {
-    const list = document.getElementById("search-results");
-    clear(list);
-    if (!hits.length) {
-      list.appendChild(text("li", "No matches.", "muted"));
-      return;
-    }
-    for (const hit of hits) {
-      const item = document.createElement("li");
-      const button = document.createElement("button");
-      button.type = "button";
-      button.textContent = hit.title;
-      button.addEventListener("click", () => loadCard(hit.id));
-      item.appendChild(button);
-      item.appendChild(text("span", ` ${hit.id}`, "muted"));
-      if (hit.snippet) {
-        item.appendChild(text("p", hit.snippet, "snippet"));
-      }
-      list.appendChild(item);
-    }
-  }
-
-  function renderCard(card) {
-    const view = document.getElementById("card-view");
-    clear(view);
-    view.appendChild(text("h3", card.title));
-    view.appendChild(text("p", `id: ${card.id}`, "muted"));
-    if (card.tags.length) {
-      view.appendChild(text("p", `tags: ${card.tags.join(", ")}`, "muted"));
-    }
-    view.appendChild(text("p", `updated: ${card.updated}`, "muted"));
-    view.appendChild(text("pre", card.body, "pre"));
-  }
-
-  function renderRecent(entries) {
-    const list = document.getElementById("recent-list");
-    clear(list);
-    if (!entries.length) {
-      list.appendChild(text("li", "No activity yet.", "muted"));
-      return;
-    }
-    for (const entry of entries) {
-      list.appendChild(text("li", entry));
-    }
-  }
-
-  function renderFixes(fixes) {
-    const list = document.getElementById("fixes-list");
-    clear(list);
-    if (!fixes.length) {
-      list.appendChild(text("li", "No fixes recorded yet.", "muted"));
-      return;
-    }
-    for (const hit of fixes) {
-      const item = document.createElement("li");
-      item.appendChild(text("strong", `${hit.project} (${hit.date})`));
-      item.appendChild(text("span", ` ${hit.workspace || "General"}`, "muted"));
-      item.appendChild(text("p", `problem: ${hit.error}`, "snippet"));
-      item.appendChild(text("p", `fix: ${hit.fix}`, "snippet"));
-      list.appendChild(item);
-    }
-  }
-
-  function renderDoctor(report) {
-    document.getElementById("doctor-view").textContent = JSON.stringify(report, null, 2);
-  }
-
-  async function loadProjects() {
-    const data = await api("/api/cards");
-    renderProjects(data.projects);
-  }
-
-  async function loadCard(id) {
-    const data = await api(`/api/cards/${encodeURIComponent(id)}`);
-    renderCard(data.card);
-  }
-
-  async function loadRecent() {
-    const data = await api("/api/recent?limit=10");
-    renderRecent(data.entries);
-  }
-
-  async function loadFixes(query = "") {
-    const params = new URLSearchParams({ limit: "10" });
-    if (query) {
-      params.set("q", query);
-    }
-    const data = await api(`/api/fixes?${params.toString()}`);
-    renderFixes(data.fixes);
-  }
-
-  async function loadDoctor() {
-    const data = await api("/api/doctor");
-    renderDoctor(data.report);
-  }
-
-  async function refresh() {
-    setStatus("Loading...");
-    try {
-      const health = await api("/api/health");
-      state.writes = Boolean(health.writes);
-      document.getElementById("remember-section").hidden = !state.writes;
-      await Promise.all([loadProjects(), loadRecent(), loadFixes(), loadDoctor()]);
-      setStatus(state.writes ? "Ready. Writes are enabled." : "Ready. Read-only mode.");
-    } catch (error) {
-      setStatus(error.message, true);
-    }
-  }
-
-  document.getElementById("search-form").addEventListener("submit", async (event) => {
-    event.preventDefault();
-    const query = document.getElementById("search-query").value.trim();
-    const tag = document.getElementById("search-tag").value.trim();
-    if (!query) {
-      setStatus("Enter a search query.", true);
-      return;
-    }
-    const params = new URLSearchParams({ q: query });
-    if (tag) {
-      params.set("tag", tag);
-    }
-    try {
-      setStatus("Searching...");
-      const data = await api(`/api/search?${params.toString()}`);
-      renderSearch(data.hits);
-      setStatus(`${data.hits.length} result(s).`);
-    } catch (error) {
-      setStatus(error.message, true);
-    }
-  });
-
-  document.getElementById("fixes-form").addEventListener("submit", async (event) => {
-    event.preventDefault();
-    const query = document.getElementById("fixes-query").value.trim();
-    try {
-      setStatus("Loading fixes...");
-      await loadFixes(query);
-      setStatus("Ready.");
-    } catch (error) {
-      setStatus(error.message, true);
-    }
-  });
-
-  document.getElementById("remember-form").addEventListener("submit", async (event) => {
-    event.preventDefault();
-    if (!state.writes) {
-      setStatus("Writes are disabled.", true);
-      return;
-    }
-    if (!document.getElementById("remember-confirm").checked) {
-      setStatus("Confirm the decision before saving.", true);
-      return;
-    }
-    const project = document.getElementById("remember-project").value.trim();
-    const decision = document.getElementById("remember-decision").value.trim();
-    const tags = document.getElementById("remember-tags").value
-      .split(",")
-      .map((tag) => tag.trim())
-      .filter(Boolean);
-    if (!project || !decision) {
-      setStatus("Project and decision are required.", true);
-      return;
-    }
-    try {
-      setStatus("Saving...");
-      await api("/api/remember", {
-        method: "POST",
-        body: JSON.stringify({ project, decision, tags, confirm: true }),
-      });
-      document.getElementById("remember-form").reset();
-      setStatus("Decision remembered.");
-      await Promise.all([loadProjects(), loadRecent(), loadDoctor()]);
-    } catch (error) {
-      setStatus(error.message, true);
-    }
-  });
-
-  state.token = readToken();
-  if (!state.token) {
-    setStatus("No dashboard token. Open the URL printed by engramkeep dashboard.", true);
-  } else {
-    refresh();
-  }
-})();
-"""
-
-
-STYLE_CSS = """\
-:root {
-  color-scheme: light dark;
-  --bg: #f7f7f5;
-  --panel: #ffffff;
-  --text: #1f2328;
-  --muted: #5b6570;
-  --border: #d8dde3;
-  --accent: #1f6feb;
-  --error: #b42318;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #111418;
-    --panel: #171b21;
-    --text: #e6edf3;
-    --muted: #9aa7b4;
-    --border: #2d333b;
-    --accent: #6cb6ff;
-    --error: #ff8a80;
-  }
-}
-
-* {
-  box-sizing: border-box;
-}
-
-body {
-  margin: 0 auto;
-  max-width: 70rem;
-  padding: 1.5rem;
-  background: var(--bg);
-  color: var(--text);
-  font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
-}
-
-header {
-  border-bottom: 1px solid var(--border);
-  margin-bottom: 1.5rem;
-  padding-bottom: 1rem;
-}
-
-.brand {
-  align-items: center;
-  display: flex;
-  gap: 0.85rem;
-}
-
-.brand h1 {
-  margin: 0;
-}
-
-.brand p {
-  margin: 0.2rem 0 0;
-}
-
-.brand-logo {
-  border: 1px solid var(--border);
-  border-radius: 0.45rem;
-  display: block;
-  flex-shrink: 0;
-}
-
-h1, h2, h3 {
-  line-height: 1.25;
-}
-
-main {
-  display: grid;
-  gap: 1.25rem;
-  grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr));
-}
-
-section {
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 0.6rem;
-  padding: 1rem;
-}
-
-form {
-  display: grid;
-  gap: 0.5rem;
-}
-
-label {
-  font-weight: 600;
-}
-
-input, textarea, button {
-  font: inherit;
-}
-
-input, textarea {
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 0.35rem;
-  color: var(--text);
-  padding: 0.5rem;
-  width: 100%;
-}
-
-button {
-  background: var(--accent);
-  border: 0;
-  border-radius: 0.35rem;
-  color: #ffffff;
-  cursor: pointer;
-  padding: 0.5rem 0.8rem;
-}
-
-button:hover {
-  filter: brightness(1.08);
-}
-
-.results {
-  list-style: none;
-  margin: 0.8rem 0 0;
-  padding: 0;
-}
-
-.results li {
-  border-top: 1px solid var(--border);
-  padding: 0.5rem 0;
-}
-
-.results li:first-child {
-  border-top: 0;
-}
-
-.muted {
-  color: var(--muted);
-}
-
-.error {
-  color: var(--error);
-  font-weight: 600;
-}
-
-.snippet {
-  color: var(--muted);
-  margin: 0.25rem 0 0;
-}
-
-.card h3 {
-  margin-top: 0;
-}
-
-.pre {
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 0.35rem;
-  overflow: auto;
-  padding: 0.75rem;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
-.checkbox {
-  align-items: center;
-  display: flex;
-  gap: 0.5rem;
-}
-
-.checkbox input {
-  width: auto;
-}
-"""
 
 
 if __name__ == "__main__":

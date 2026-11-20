@@ -258,3 +258,148 @@ def add_tags(card: Card, tags: Iterable[str], *, now: str | None = None) -> list
     if added:
         card.updated = now or utc_now_iso()
     return added
+
+
+def remove_tags(card: Card, tags: Iterable[str], *, now: str | None = None) -> list[str]:
+    """Remove normalized tags from ``card`` and return the removed ones."""
+    targets = normalize_tags(tags)
+    removed: list[str] = []
+    for tag in targets:
+        if tag in card.tags:
+            card.tags.remove(tag)
+            removed.append(tag)
+    if removed:
+        card.updated = now or utc_now_iso()
+    return removed
+
+
+def _find_decision_line(lines: list[str], target: str) -> tuple[int, str]:
+    """Locate one decision bullet line under ``## Decisions`` (or body fallback).
+
+    Matches exact bullet text (case-insensitive) first; falls back to a unique
+    substring match. Raises ``ValidationError`` on zero or ambiguous matches.
+    """
+    cleaned = " ".join(strip_control_chars(str(target)).split())
+    if not cleaned:
+        raise ValidationError("decision selector must not be empty")
+    needle = cleaned.lower()
+
+    heading_index = _find_heading(lines, "Decisions")
+    if heading_index is not None:
+        end_index = next(
+            (i for i in range(heading_index + 1, len(lines)) if lines[i].startswith("## ")),
+            len(lines),
+        )
+        search_range = range(heading_index + 1, end_index)
+    else:
+        search_range = range(len(lines))
+
+    exact: list[tuple[int, str]] = []
+    partial: list[tuple[int, str]] = []
+    for idx in search_range:
+        stripped = lines[idx].strip()
+        if not stripped.startswith("- "):
+            continue
+        text = stripped[2:].strip()
+        lowered = text.lower()
+        if lowered == needle:
+            exact.append((idx, text))
+        elif needle in lowered:
+            partial.append((idx, text))
+
+    if len(exact) == 1:
+        return exact[0]
+    if len(exact) > 1:
+        raise ValidationError(f"multiple decisions match {cleaned!r}; be more specific")
+    if len(partial) == 1:
+        return partial[0]
+    if len(partial) > 1:
+        raise ValidationError(
+            f"ambiguous decision selector {cleaned!r} matches {len(partial)} bullets"
+        )
+    raise ValidationError(f"decision not found: {cleaned!r}")
+
+
+def remove_decision(card: Card, target: str, *, now: str | None = None) -> str:
+    """Remove one matching decision bullet from ``card`` and return its text."""
+    lines = card.body.splitlines()
+    idx, matched_text = _find_decision_line(lines, target)
+    del lines[idx]
+    card.body = "\n".join(lines).rstrip() + "\n"
+    card.updated = now or utc_now_iso()
+    return matched_text
+
+
+def supersede_decision(
+    card: Card,
+    old_decision: str,
+    new_decision: str,
+    *,
+    reason: str | None = None,
+    now: str | None = None,
+) -> tuple[str, str]:
+    """Replace an active decision with a new one while preserving ADR history.
+
+    Removes the matched active bullet from ``## Decisions``, adds the new
+    decision there, and records the superseded entry under ``## Superseded``
+    with the date and optional reason.
+    """
+    cleaned_new = " ".join(strip_control_chars(str(new_decision)).split())
+    if not cleaned_new:
+        raise ValidationError("new decision must not be empty")
+    if len(cleaned_new) > _DECISION_LIMIT:
+        raise ValidationError(f"decision is longer than {_DECISION_LIMIT} characters")
+
+    cleaned_reason = (
+        " ".join(strip_control_chars(str(reason)).split())
+        if reason is not None and str(reason).strip()
+        else None
+    )
+    if cleaned_reason and len(cleaned_reason) > 500:
+        cleaned_reason = cleaned_reason[:500].rstrip()
+
+    timestamp = now or utc_now_iso()
+    lines = card.body.splitlines()
+    idx, matched_old = _find_decision_line(lines, old_decision)
+    if matched_old.lower() == cleaned_new.lower():
+        raise ValidationError("new decision must differ from the superseded decision")
+
+    # Replace the active bullet in place so ordering under ## Decisions stays readable.
+    new_bullet = f"- {cleaned_new}"
+    if new_bullet in lines:
+        del lines[idx]
+    else:
+        lines[idx] = new_bullet
+
+    # Append the historical record under ## Superseded.
+    date_prefix = timestamp[:10]
+    history_bullet = f"- [{date_prefix}] ~~{matched_old}~~ -> {cleaned_new}"
+    if cleaned_reason:
+        history_bullet += f" (reason: {cleaned_reason})"
+
+    sup_index = _find_heading(lines, "Superseded")
+    if sup_index is None:
+        base = "\n".join(lines).rstrip()
+        card.body = base + f"\n\n## Superseded\n\n{history_bullet}\n"
+    else:
+        next_heading = next(
+            (i for i in range(sup_index + 1, len(lines)) if lines[i].startswith("## ")),
+            len(lines),
+        )
+        insert_at = next_heading
+        while insert_at > sup_index + 1 and not lines[insert_at - 1].strip():
+            insert_at -= 1
+        lines.insert(insert_at, history_bullet)
+        if insert_at > 0 and lines[insert_at - 1].strip().lower() == "## superseded":
+            lines.insert(insert_at, "")
+            insert_at += 1
+        if (
+            next_heading < len(lines)
+            and insert_at + 1 < len(lines)
+            and lines[insert_at + 1].strip()
+        ):
+            lines.insert(insert_at + 1, "")
+        card.body = "\n".join(lines).rstrip() + "\n"
+
+    card.updated = timestamp
+    return matched_old, cleaned_new

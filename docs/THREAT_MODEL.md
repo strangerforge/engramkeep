@@ -1,109 +1,59 @@
 # Threat model
 
 This document describes the security assumptions and known limitations of
-Engramkeep 0.5.3. It is intentionally conservative.
+Engramkeep 1.0.0. It is intentionally conservative.
 
 ## Assets
 
-- Memory cards, generated files, and the troubleshooting registry in the local store.
-- The user's filesystem and agent configuration.
+- Memory cards, generated files, backups, and the troubleshooting registry in
+  the local (and optional project `.engramkeep/`) store.
+- The user's filesystem, Git working tree, and agent configuration.
 - The integrity of the agent's behavior when it reads memory.
 - The user's credentials and personal data that might appear in text.
 
 ## Trust boundaries
 
-1. **User and agent input -> store.** Project names, decisions, tags, and
-   imported text are untrusted.
-2. **Store -> agent context.** Card content is untrusted data even after it is
-   stored. A card can contain text that looks like an instruction.
+1. **User and agent input -> store.** Project names, decisions, tags, fixes,
+   and imported transcripts are untrusted.
+2. **Store -> agent context.** Card content, fixes, and MCP resources are
+   untrusted data even after storage.
 3. **Local process -> filesystem.** The process runs with the user's
    privileges. A local attacker or malware with the same privileges is outside
    the model.
-4. **MCP client and browser -> store.** The MCP stdio server and the
-   loopback dashboard both exist in 0.5.3. MCP is read-only by default; the
-   dashboard is read-only by default and requires a per-session token.
-5. **Agent A -> Store -> Agent B (cross-agent & shared store).** Multiple agents
-   can share one local store (or a user may point `--home` at a synced/project
-   directory). A lower-trust or write-enabled agent can persist text that a
-   higher-privilege agent later reads; `--allow-write` should only be granted to
-   trusted agents.
+4. **MCP client and browser -> store.** MCP stdio server and loopback dashboard
+   are read-only by default; writes require `--allow-write` (plus per-session
+   token and explicit `confirm: true` in the dashboard).
+5. **Agent A -> Store -> Agent B (cross-agent & layered `.engramkeep/`).**
+   A repository's `.engramkeep/` store may come from another contributor; cards
+   are treated as untrusted data and read-only unless the user explicitly writes
+   with `--local`.
 
 ## Threats and mitigations
 
-| Threat | Mitigation in 0.5.3 | Residual risk |
+| Threat | Mitigation in 1.0.0 | Residual risk |
 | --- | --- | --- |
-| Path traversal through a project name | `normalize_project_id()` rejects separators, drive letters, control characters, and traversal; `safe_join()` proves containment | A bug in a future caller could bypass the helper |
-| Symlink escape | `safe_join()` resolves symlinks; card scanning rejects symlinks; `append_text()` rejects symlinks | Junction behavior on some Windows versions is not exhaustively tested |
-| Secret written to a card or registry entry | `redact_text()` covers common token formats (OpenAI, Anthropic, GitHub, GitLab, Stripe, npm, PyPI, HuggingFace, DigitalOcean, Google, SendGrid, AWS, Slack, Telegram, webhooks), PGP/OPENSSH/PEM key blocks, HTTP auth headers, URL credentials, credential assignments, and email | Encoded or novel secrets can pass through |
-| Prompt injection in a card or registry entry | Documentation, skill, and templates state that memory is data, not instructions; the core never executes card or registry text | An agent can still choose to follow malicious text |
-| Malicious Markdown | Cards are rendered as text by the CLI and the dashboard; the dashboard sends a strict CSP and never uses `innerHTML` | A browser bug or a future renderer could reintroduce HTML injection |
-| Local attacker or malware | Files are created with private permissions where the OS supports it; there is no external network surface, and the dashboard is loopback-only | Same-user malware can read the files |
-| Destructive action | `forget` requires `--yes`; cards move to trash instead of being deleted | Trash retains data until manually removed |
-| Unsafe installer | Dry-run by default; `--apply` edits only inside `<!-- engramkeep:begin/end -->` managed blocks, refuses symlinks and unreadable JSON, and creates timestamped backups plus `manifest.json` | A user who deletes the backup directory loses the automatic snapshot |
-| Supply-chain dependency | Zero runtime dependencies; dev dependencies use lower version specifiers monitored by Dependabot; GitHub Actions workflows are pinned to 40-char commit SHAs | Build tooling is still a dependency without a full lockfile |
-| Denial of service via huge input | Decision text is capped at 4000 characters (and rejected above 256 KiB before scanning); `_PRIVATE_KEY` scanning is bounded; path components are bounded | Very large hand-written files are not size-limited |
-| Malformed card crashes a command | Parse errors are reported; `doctor` surfaces them | A malformed card is skipped by search/list |
-| Audit log tampering | Append-only by convention; no cryptographic sealing | A local user can edit the file |
-| Store schema confusion | `meta.json` schema version is validated; newer/older versions are rejected | No migration exists yet |
-| MCP write tool misuse | `engramkeep_remember` and `engramkeep_record_fix` are not listed or callable unless the server starts with `--allow-write`; there is no MCP forget tool | A user who enables `--allow-write` gives the client permission to add cards |
-| MCP network exposure | stdio transport only; the server never opens a socket | A client can still send arbitrary JSON-RPC |
-| MCP denial of service | Request lines are capped at 1 MiB; queries, tags, and limits are bounded | A client can send many requests |
-| MCP malformed input | Invalid JSON, UTF-8, batches, and arguments produce JSON-RPC errors without crashing the loop | Error text can reveal local paths |
-| MCP prompt injection | Initialization instructions and docs say card content is untrusted; tools return content as data | A client can still choose to follow card text |
-| Dashboard token leakage | The token is delivered in the URL fragment, never embedded in HTML, kept in `sessionStorage`, and sent only in the `X-Engramkeep-Token` header; responses use `Cache-Control: no-store` and `Referrer-Policy: no-referrer` | A browser extension or local process can still read the token |
-| Dashboard DNS rebinding | The server validates the `Host` header against `127.0.0.1` and `localhost` with the bound port and exposes no CORS headers | A local proxy or hosts-file change can still reach loopback |
-| Dashboard CSRF | Writes require the token header, `Content-Type: application/json`, a same-origin `Origin` when present, POST, and `confirm: true`; no cookies are used | A compromised same-origin page or browser extension is outside the model |
-| Dashboard XSS | Card content is rendered with `textContent`, the shell loads only `/app.js` and `/style.css`, and CSP is `default-src 'none'` | A browser bug or a compromised local asset could still execute code |
-| Dashboard path traversal | Every card read goes through `Store.get_card()` and `safe_join()`; traversal attempts return an error and are tested | A bug in a future route could bypass the store |
-| Dashboard denial of service | Request bodies are capped at 64 KiB, queries at 2000 characters, limits at 50, and tags at 20 | A local process can still open many connections |
+| Path traversal through a project name or URI | `normalize_project_id()` rejects separators, drive letters, control characters, and traversal; `safe_join()` proves containment across CLI, MCP tools/resources, dashboard, trash/restore, and migrations | A bug in a future caller could bypass the helper |
+| Symlink / NTFS junction escape | `safe_join()` resolves symlinks; `is_link_or_junction()` checks symlinks and Windows reparse points across store, trash, project discovery, importer, installer, migrations, and sync | OS-specific edge cases on exotic filesystems |
+| Secret written to card, fix, or imported transcript | `redact_text()` runs before preview or persistence on cards, superseded decisions, fixes, and all transcript adapters; `doctor` scans cards and fixes | Encoded or novel secrets can pass through |
+| Prompt injection in cards, fixes, or MCP resources | Documentation, skill, MCP initialization instructions, `_untrusted_data_notice`, and MCP resource headers state memory is untrusted data; core never executes card text | An agent can still choose to follow malicious text |
+| Malicious Markdown / Dashboard XSS | Modular dashboard assets use pure `createElement` + `textContent` (zero `innerHTML`), strict CSP (`default-src 'none'`), and `X-Content-Type-Options: nosniff` | A browser bug could still bypass isolation |
+| Untrusted transcript import (`importer.py` & `adapters/`) | Dry-run by default (`--apply` or `--interactive` required); 10 MiB hard file cap; symlinks/junctions refused; control/bidi chars stripped; secrets redacted before display or write; fixes deduplicated | Large crafted regex backtracking or noisy natural-language false positives (mitigated by bounded match lengths and `--limit`) |
+| Audit log tampering (`audit.py`) | Zero-dep SHA-256 hash chain (`prev_hash` + `hash`) verified by `engramkeep doctor`; any modified, deleted, or injected line fails doctor | An attacker with local write access can rewrite the entire chain from genesis |
+| Destructive deletion or failed migration | `forget` moves to `trash/` (recoverable via `restore`); `trash --purge` requires `--yes`; `doctor --fix` and `migrate --apply` create timestamped backups and auto-rollback failed migrations | Deleting backup directories removes rollback snapshots |
+| Accidental secret leak or force-push in Git sync (`sync.py`) | Explicit allowlist only (`meta.json`, `INDEX.md`, `TROUBLESHOOTING.md`, `projects/*.md`); never runs `git add -A` or `git push`; `store.doctor()` must pass before commit; `shell=False` with resolved `git` binary | User can still manually stage excluded files or push sensitive non-redacted text |
+| Unsafe installer | Dry-run by default; managed blocks only; refuses symlinks and unreadable JSON; timestamped backups + `manifest.json`; `--mcp` is read-only unless `--mcp-allow-write` is passed | Deleting the installer backup directory removes automatic snapshots |
+| Supply-chain dependency | Zero runtime dependencies (Python stdlib only); pinned GitHub Actions commit SHAs | Dev/build tooling remains an optional dev dependency |
+| MCP abuse or network exposure | stdio transport only; no network listener; multi-version negotiation (`2024-11-05`..`2025-11-25`); read-only by default; no forget tool; 1 MiB line cap and 32-item batch cap | A client started with `--allow-write` can add/supersede decisions and fixes |
+| Dashboard CSRF / DNS rebinding / token leakage | `127.0.0.1` exclusive bind; per-session token in URL fragment -> `sessionStorage` -> `X-Engramkeep-Token`; strict Host + Origin checks; POST-only mutations (`remember` & `fixes`) with `confirm: true` | Same-user local processes or browser extensions are outside the model |
 
 ## Out of scope
 
 - A hostile multi-user host or shared account.
 - Malware running as the same user.
 - Physical access to an unlocked machine.
-- Encrypted-at-rest storage (not implemented).
-- Cloud sync, remote backups, and multi-device conflict resolution.
+- Encrypted-at-rest storage.
+- Cloud sync or automatic remote Git push.
 - Guaranteed secret detection.
-- Perfect isolation of agent behavior from stored text.
-
-## Security requirements for integrations
-
-### MCP server (implemented in 0.2.0)
-
-- [x] stdio transport only; no TCP listener.
-- [x] newline-delimited JSON-RPC 2.0, protocol version 2025-11-25.
-- [x] read-only tools by default.
-- [x] writes require the explicit `--allow-write` server flag.
-- [x] validate every path through the same store helpers.
-- [x] return card content as data; initialization instructions call it
-  untrusted.
-- [x] no forget tool.
-- [x] cap request lines and tool arguments.
-
-Residual risk: a client started with `--allow-write` can add cards, and a
-client can ignore the instruction to treat card text as data.
-
-### Dashboard (implemented in 0.3.0)
-
-- [x] bind to `127.0.0.1` only (with `SO_EXCLUSIVEADDRUSE` on Windows).
-- [x] require a per-session token and reject missing/invalid tokens.
-- [x] enforce a path jail for every read and write.
-- [x] use a strict Content-Security-Policy.
-- [x] render card content as text, never with `innerHTML`.
-- [x] mutations use POST with CSRF protection and explicit confirmation.
-- [x] no GET request may mutate state.
-
-Residual risk: the token is only as safe as the browser session, and a local
-process running as the same user can still read the store directly.
-
-### Installer (implemented in 0.5.0)
-
-- [x] preview changes by default.
-- [x] back up every file before modification and record changes in `manifest.json`.
-- [x] update a marked managed block; never overwrite unrelated content.
-- [x] reject symlinked targets and unreadable JSON configs.
-- [x] do not create junctions, services, scheduled tasks, or auto-start entries.
 
 ## Reporting
 

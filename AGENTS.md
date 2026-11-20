@@ -38,19 +38,23 @@ mypy src
 
 ## Architecture
 
-- `src/engramkeep/config.py` — platform data directory, `ENGRAMKEEP_HOME`, schema version.
-- `src/engramkeep/paths.py` — `safe_join()`, atomic writes, private directories.
+- `src/engramkeep/config.py` — platform data directory, `ENGRAMKEEP_HOME`, `.engramkeep/` project discovery, schema version.
+- `src/engramkeep/paths.py` — `safe_join()`, atomic writes, advisory file locks, private directories.
 - `src/engramkeep/redact.py` — secret redaction before anything is stored.
-- `src/engramkeep/models.py` — project card model, frontmatter parser/renderer.
-- `src/engramkeep/store.py` — store operations, index, audit log, trash.
-- `src/engramkeep/search.py` — keyword search, bilingual EN/TR expansion bonus, and snippets.
-- `src/engramkeep/concepts.py` — deterministic bilingual EN/TR concept map; no project-specific terms, no network.
-- `src/engramkeep/troubleshoot.py` — troubleshooting registry (`TROUBLESHOOTING.md`); pure parse/render/scoring, I/O stays in `store.py`.
-- `src/engramkeep/cli.py` — argparse CLI.
-- `src/engramkeep/mcp_server.py` — MCP stdio server; read-only tools plus opt-in write tools (`--allow-write`); no forget tool.
-- `src/engramkeep/dashboard.py` — loopback-only dashboard with token auth, CSP, path jail, and opt-in writes.
-- `src/engramkeep/installer.py` — backed-up, managed-block installer for ten agents; dry run by default, `--apply` writes, `--uninstall` removes.
-- `src/engramkeep/adapters/` — future transcript adapters.
+- `src/engramkeep/audit.py` — SHA-256 hash-chain sealing and verification for `audit.log`.
+- `src/engramkeep/models.py` — project card model, frontmatter parser/renderer, decision lifecycle (`supersede`, `untag`, `remove_decision`).
+- `src/engramkeep/store.py` — store operations, index, activity log, hash-chained audit log, trash/restore, `doctor --fix`, and `LayeredStore`.
+- `src/engramkeep/search.py` — BM25, quoted phrase, Turkish prefix/softening search, bilingual EN/TR expansion bonus, and snippets.
+- `src/engramkeep/concepts.py` — Turkish-safe case folding and deterministic bilingual EN/TR concept map; no project-specific terms, no network.
+- `src/engramkeep/troubleshoot.py` — troubleshooting registry (`TROUBLESHOOTING.md`); pure parse/render/BM25 search, I/O stays in `store.py`.
+- `src/engramkeep/adapters/` — modular read-only transcript adapters (`claude-jsonl`, `cursor`, `opencode`, `codex`, `gemini`, `text`).
+- `src/engramkeep/importer.py` — consent-based transcript importer (`--dry-run` default, `--apply`, `--interactive`).
+- `src/engramkeep/migrations.py` — schema migration framework with automatic backups and rollback.
+- `src/engramkeep/sync.py` — doctor-gated, allowlist-only local Git sync (never auto-pushes or runs `git add -A`).
+- `src/engramkeep/cli.py` — argparse CLI including shell completion.
+- `src/engramkeep/mcp_server.py` — MCP stdio server; multi-version negotiation, tools, resources, prompts; read-only by default (`--allow-write` opt-in); no forget tool.
+- `src/engramkeep/dashboard.py` & `src/engramkeep/dashboard_assets/` — loopback-only dashboard with modular assets, token auth, CSP, path jail, text-only Markdown rendering, export, and opt-in writes.
+- `src/engramkeep/installer.py` & `src/engramkeep/data/SKILL.md` — backed-up, managed-block installer for ten agents with MCP + `--mcp-allow-write` + `--skill`; dry run by default, `--apply` writes, `--uninstall` removes.
 
 ## Security rules (must follow)
 

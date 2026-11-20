@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title>Engramkeep</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="stylesheet" href="/style.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <header>
+    <div class="header-row">
+      <div class="brand">
+        <img class="brand-logo" src="/logo.svg" width="44" height="44" alt="">
+        <div>
+          <h1>Engramkeep</h1>
+          <p class="muted">Local-first project memory, served from 127.0.0.1.</p>
+        </div>
+      </div>
+      <div class="header-actions">
+        <button id="export-btn" type="button" class="secondary">Export JSON</button>
+      </div>
+    </div>
+    <p id="status" role="status" aria-live="polite">Loading...</p>
+  </header>
+  <main>
+    <section aria-labelledby="search-heading">
+      <h2 id="search-heading">Search</h2>
+      <form id="search-form">
+        <label for="search-query">Query</label>
+        <input id="search-query" name="q" type="search" required maxlength="2000"
+               autocomplete="off">
+        <label for="search-tag">Tag (optional)</label>
+        <input id="search-tag" name="tag" type="text" maxlength="64" autocomplete="off">
+        <button type="submit">Search</button>
+      </form>
+      <ul id="search-results" class="results"></ul>
+    </section>
+    <section aria-labelledby="projects-heading">
+      <div class="section-head">
+        <h2 id="projects-heading">Projects</h2>
+        <button id="clear-tag-btn" type="button" class="secondary small" hidden>Clear tag</button>
+      </div>
+      <div id="tag-bar" class="tag-bar"></div>
+      <ul id="project-list" class="results"></ul>
+    </section>
+    <section aria-labelledby="card-heading">
+      <div class="section-head">
+        <h2 id="card-heading">Card</h2>
+        <button id="copy-card-btn" type="button" class="secondary small" hidden>Copy Markdown</button>
+      </div>
+      <div id="card-view" class="card"><p class="muted">Select a project.</p></div>
+    </section>
+    <section aria-labelledby="recent-heading">
+      <h2 id="recent-heading">Recent activity</h2>
+      <ul id="recent-list" class="results"></ul>
+    </section>
+    <section aria-labelledby="fixes-heading">
+      <h2 id="fixes-heading">Troubleshooting fixes</h2>
+      <form id="fixes-form">
+        <label for="fixes-query">Filter fixes (optional)</label>
+        <input id="fixes-query" name="q" type="search" maxlength="2000" autocomplete="off">
+        <button type="submit">Filter</button>
+      </form>
+      <ul id="fixes-list" class="results"></ul>
+    </section>
+    <section aria-labelledby="doctor-heading">
+      <h2 id="doctor-heading">Doctor</h2>
+      <pre id="doctor-view" class="pre"></pre>
+    </section>
+    <section id="remember-section" aria-labelledby="remember-heading" hidden>
+      <h2 id="remember-heading">Remember a decision</h2>
+      <form id="remember-form">
+        <label for="remember-project">Project</label>
+        <input id="remember-project" name="project" type="text" required maxlength="128"
+               autocomplete="off">
+        <label for="remember-decision">Decision</label>
+        <textarea id="remember-decision" name="decision" required maxlength="4000"
+                  rows="5"></textarea>
+        <label for="remember-tags">Tags (comma-separated)</label>
+        <input id="remember-tags" name="tags" type="text" maxlength="400" autocomplete="off">
+        <label class="checkbox">
+          <input id="remember-confirm" type="checkbox" required>
+          I confirm this is a durable decision.
+        </label>
+        <button type="submit">Remember</button>
+      </form>
+    </section>
+    <section id="fix-section" aria-labelledby="fix-heading" hidden>
+      <h2 id="fix-heading">Record a troubleshooting fix</h2>
+      <form id="record-fix-form">
+        <label for="fix-error">Problem / Error</label>
+        <textarea id="fix-error" name="error" required maxlength="1000" rows="3"></textarea>
+        <label for="fix-solution">Verified fix</label>
+        <textarea id="fix-solution" name="solution" required maxlength="2000" rows="3"></textarea>
+        <label for="fix-project">Project (optional)</label>
+        <input id="fix-project" name="project" type="text" maxlength="128" autocomplete="off">
+        <label for="fix-workspace">Workspace (optional)</label>
+        <input id="fix-workspace" name="workspace" type="text" maxlength="260" autocomplete="off">
+        <label class="checkbox">
+          <input id="fix-confirm" type="checkbox" required>
+          I confirm this fix is verified and contains no secrets.
+        </label>
+        <button type="submit">Record fix</button>
+      </form>
+    </section>
+  </main>
+  <noscript><p>Engramkeep dashboard requires JavaScript.</p></noscript>
+</body>
+</html>

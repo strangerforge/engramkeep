@@ -7,7 +7,7 @@ import re
 from collections.abc import Iterable
 from dataclasses import dataclass
 
-from .concepts import expand_query_terms
+from .concepts import expand_query_terms, prefix_pattern, tr_lower
 from .models import Card, normalize_tag
 
 _BM25_K1 = 1.5
@@ -16,6 +16,7 @@ _TITLE_WEIGHT = 4.0
 _TAG_WEIGHT = 2.5
 _ID_WEIGHT = 2.0
 _BODY_WEIGHT = 1.0
+_PREFIX_WEIGHT = 0.55
 
 
 @dataclass(frozen=True)
@@ -28,10 +29,11 @@ class SearchHit:
     snippet: str
     tags: tuple[str, ...]
     updated: str
+    source: str | None = None
 
     def to_dict(self) -> dict[str, object]:
         """Return a JSON-serializable representation."""
-        return {
+        payload: dict[str, object] = {
             "id": self.id,
             "title": self.title,
             "score": self.score,
@@ -39,6 +41,9 @@ class SearchHit:
             "tags": list(self.tags),
             "updated": self.updated,
         }
+        if self.source is not None:
+            payload["source"] = self.source
+        return payload
 
 
 def _plain_text(body: str) -> str:
@@ -56,8 +61,20 @@ def make_snippet(body: str, tokens: list[str], *, width: int = 160) -> str:
     if not flat:
         return ""
 
-    lowered = flat.lower()
-    positions = [lowered.find(token) for token in tokens if token and lowered.find(token) >= 0]
+    lowered = tr_lower(flat)
+    positions: list[int] = []
+    for token in tokens:
+        if not token:
+            continue
+        pos = lowered.find(token)
+        if pos >= 0:
+            positions.append(pos)
+            continue
+        pref = prefix_pattern(token)
+        if pref is not None:
+            match = pref.search(lowered)
+            if match is not None:
+                positions.append(match.start())
     if positions:
         index = min(positions)
         start = max(0, index - 60)
@@ -77,13 +94,13 @@ def make_snippet(body: str, tokens: list[str], *, width: int = 160) -> str:
 def _parse_query(query: str) -> tuple[list[str], list[str]]:
     """Split query into exact quoted phrases and deduplicated unquoted tokens."""
     phrases = [
-        " ".join(match.lower().split())
+        " ".join(tr_lower(match).split())
         for match in re.findall(r'"([^"]+)"', query)
         if match.strip()
     ]
     phrases = list(dict.fromkeys(phrases))[:16]
     unquoted = re.sub(r'"[^"]*"', " ", query)
-    tokens = list(dict.fromkeys(token for token in re.split(r"\s+", unquoted.lower()) if token))[
+    tokens = list(dict.fromkeys(token for token in re.split(r"\s+", tr_lower(unquoted)) if token))[
         :64
     ]
     return phrases, tokens
@@ -143,6 +160,7 @@ def search_cards(
         return hits[:limit]
 
     token_patterns = [_word_pattern(token) for token in tokens]
+    token_prefix_patterns = [prefix_pattern(token) for token in tokens]
     phrase_patterns = [_word_pattern(phrase) for phrase in phrases]
 
     # Bilingual (EN/TR) concept expansion. Expanded terms add a small capped
@@ -157,25 +175,33 @@ def search_cards(
 
     doc_fields = [
         (
-            card.title.lower(),
-            card.id.lower(),
-            [item.lower() for item in card.tags],
-            card.body.lower(),
+            tr_lower(card.title),
+            tr_lower(card.id),
+            [tr_lower(item) for item in card.tags],
+            tr_lower(card.body),
         )
         for card in candidates
     ]
 
     # Compute document frequency (df) per literal token across candidate corpus.
     df_counts: list[int] = []
-    for pattern in token_patterns:
+    for pattern, pref in zip(token_patterns, token_prefix_patterns, strict=True):
         df = 0
         for title, project_id, card_tags, body in doc_fields:
-            if (
+            matched = (
                 pattern.search(title)
                 or pattern.search(project_id)
                 or any(pattern.search(t) for t in card_tags)
                 or pattern.search(body)
-            ):
+            )
+            if not matched and pref is not None:
+                matched = (
+                    pref.search(title)
+                    or pref.search(project_id)
+                    or any(pref.search(t) for t in card_tags)
+                    or pref.search(body)
+                )
+            if matched:
                 df += 1
         df_counts.append(df)
 
@@ -189,13 +215,20 @@ def search_cards(
 
         bm25_score = 0.0
         matched_tokens = 0
-        for pattern, idf in zip(token_patterns, idfs, strict=True):
+        for pattern, pref, idf in zip(token_patterns, token_prefix_patterns, idfs, strict=True):
             tf = (
                 _TITLE_WEIGHT * len(pattern.findall(title))
                 + _ID_WEIGHT * len(pattern.findall(project_id))
                 + _TAG_WEIGHT * sum(len(pattern.findall(t)) for t in card_tags)
                 + _BODY_WEIGHT * len(pattern.findall(body))
             )
+            if pref is not None:
+                tf += _PREFIX_WEIGHT * (
+                    _TITLE_WEIGHT * len(pref.findall(title))
+                    + _ID_WEIGHT * len(pref.findall(project_id))
+                    + _TAG_WEIGHT * sum(len(pref.findall(t)) for t in card_tags)
+                    + _BODY_WEIGHT * len(pref.findall(body))
+                )
             if tf > 0.0:
                 matched_tokens += 1
                 bm25_score += idf * (tf * (_BM25_K1 + 1.0)) / (tf + _BM25_K1 * norm)

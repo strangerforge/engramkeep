@@ -1,8 +1,9 @@
 # Architecture
 
 Engramkeep is a small Python package with zero required runtime dependencies.
-The core is deliberately boring: files, a path jail, atomic writes, and a
-keyword search. The security properties come from what is *not* in the core.
+The core is deliberately boring: files, a path jail, atomic writes, a SHA-256
+hash-chained audit log, and deterministic BM25 + bilingual search. The security
+properties come from what is *not* in the core.
 
 ## Design principles
 
@@ -11,27 +12,34 @@ keyword search. The security properties come from what is *not* in the core.
 3. **Small auditable surface.** Standard library only for runtime code.
 4. **Safe by default.** Path jail, atomic writes, redaction, and explicit
    confirmation for destructive operations.
-5. **Memory is data, not instructions.** Cards are untrusted input to agents.
-6. **No hidden automation.** No Git push, cloud upload, junctions, daemons, or
-   auto-start entries.
+5. **Memory is data, not instructions.** Cards and troubleshooting entries are
+   untrusted input to agents.
+6. **No hidden automation.** No automatic Git push, cloud upload, junctions,
+   daemons, or auto-start entries.
 
 ## Package layout
 
 | Module | Responsibility |
 | --- | --- |
-| `config.py` | Resolve the memory home from CLI, environment, or platform default. |
-| `paths.py` | Validate path components, enforce the path jail, write atomically, create private directories. |
+| `config.py` | Resolve global home (CLI, `ENGRAMKEEP_HOME`, platform default) and discover project-local `.engramkeep/` stores. |
+| `paths.py` | Validate path components, enforce the path jail (`safe_join()`), atomic writes, advisory file locks, private directories. |
 | `redact.py` | Best-effort secret and email redaction before storage. |
-| `models.py` | Card dataclass, frontmatter parser/renderer, decision and tag mutation. |
-| `concepts.py` | Deterministic bilingual EN/TR concept expansion used by search and the registry. |
-| `search.py` | Keyword scoring, tag filtering, bilingual expansion bonus, snippets. |
-| `store.py` | Store lifecycle, cards, index, activity log, audit trail, trash, doctor, troubleshooting registry. |
-| `troubleshoot.py` | Troubleshooting registry: parse/render `TROUBLESHOOTING.md`, scoring, untrusted-data handling. |
-| `cli.py` | argparse command-line interface. |
-| `installer.py` | Backed-up, managed-block agent integration installer (dry-run by default). |
-| `mcp_server.py` | MCP stdio server: newline-delimited JSON-RPC, read-only tools, opt-in write tools. |
-| `dashboard.py` | Hardened loopback dashboard: token auth, strict CSP, path jail, read-only API, opt-in POST remember. |
-| `adapters/` | Reserved for future read-only transcript adapters. |
+| `audit.py` | Tamper-evident SHA-256 hash chain sealing and verification for `audit.log`. |
+| `models.py` | Card dataclass, frontmatter parser/renderer, decision lifecycle (`append_decision`, `supersede_decision`, `remove_decision`, `add_tags`, `remove_tags`). |
+| `concepts.py` | Turkish-safe case folding (`tr_lower`), agglutinative prefix matching, and deterministic bilingual EN/TR concept expansion. |
+| `search.py` | Field-weighted BM25, quoted phrase matching, Turkish prefix/softening matching, tag filtering, bilingual expansion bonus, snippets. |
+| `store.py` | Store lifecycle, cards, index, activity log, hash-chained audit trail, trash/restore/purge, deduplicated fixes, `doctor --fix`, and `LayeredStore`. |
+| `troubleshoot.py` | Troubleshooting registry: parse/render `TROUBLESHOOTING.md`, BM25 + phrase + bilingual search, deduplication keys. |
+| `adapters/` | Modular read-only transcript adapters (`claude-jsonl`, `cursor`, `opencode`, `codex`, `gemini`, `text`) and natural-language candidate extraction. |
+| `importer.py` | Consent-based transcript importer (dry-run default, `--apply`, `--interactive` `[y/n/a/q]`). |
+| `migrations.py` | Schema migration framework (`engramkeep migrate`) with automatic backups, legacy `audit.log` sealing, and automatic/manual rollback. |
+| `sync.py` | Safe allowlist local Git sync (`engramkeep sync`): doctor-gated commits, explicit allowlist, never runs `git add -A` or `git push`. |
+| `cli.py` | argparse CLI including shell completion (`bash`, `zsh`, `fish`, `powershell`). |
+| `installer.py` | Backed-up, managed-block installer for ten agents with expanded MCP support, `--mcp-allow-write`, portable command resolution, and `--skill`. |
+| `mcp_server.py` | MCP stdio server: multi-version protocol negotiation, read/write tools, resources (`engramkeep://...`), and prompts. |
+| `dashboard.py` & `dashboard_assets/` | Hardened loopback dashboard with modular HTML/JS/CSS/SVG assets, token auth, strict CSP, text-only structured Markdown rendering, tag filters, export, and opt-in `POST /api/remember` + `POST /api/fixes`. |
+| `data/SKILL.md` | Bundled portable skill file installed by `engramkeep install --skill`. |
+| `py.typed` | PEP 561 type information marker. |
 
 ## Data flow
 
@@ -39,132 +47,52 @@ keyword search. The security properties come from what is *not* in the core.
 CLI arguments
     |
     v
-config.resolve_home()  ->  Store(home)
+config.resolve_home() [+ find_project_store()]  ->  Store / LayeredStore
     |
     v
 normalize_project_id() -> safe_join(projects_dir, "<id>.md")
     |
     v
-redact_text() -> models.append_decision() -> paths.atomic_write_text()
+redact_text() -> models.*() -> paths.atomic_write_text()
     |
     +--> INDEX.md regenerated from valid cards
     +--> RECENT_ACTIVITY.md appended
-    +--> audit.log appended (metadata only)
+    +--> audit.log appended (metadata + SHA-256 hash chain)
 ```
-
-A read follows the same path in reverse. `scan_cards()` rejects symlinks,
-validates each filename through `safe_join()`, and reports malformed files
-instead of guessing.
 
 ## Storage layout
 
 ```text
-<home>/
-├── meta.json              # schema version and creation time
+<home>/   (or <repo>/.engramkeep/ for project-scoped layered memory)
+├── meta.json              # schema version and creation/migration metadata
 ├── INDEX.md               # generated project index
 ├── RECENT_ACTIVITY.md     # human-readable activity bullets
-├── TROUBLESHOOTING.md     # resolved errors and verified fixes
-├── audit.log              # append-only JSON Lines metadata
+├── TROUBLESHOOTING.md     # deduplicated resolved errors and verified fixes
+├── audit.log              # append-only SHA-256 hash-chained JSONL metadata
 ├── projects/
-│   └── <project-id>.md
-└── trash/
-    └── <project-id>-<timestamp>.md
+│   └── <project-id>.md    # Decisions + optional ADR Superseded history
+├── trash/                 # recoverable cards moved by `forget`, restored by `restore`
+└── backups/
+    ├── installer/         # installer snapshots + manifest.json
+    ├── doctor/            # backups created by `doctor --fix`
+    └── migrations/        # rollback snapshots created by `migrate --apply`
 ```
-
-### `meta.json`
-
-```json
-{
-  "schema_version": 1,
-  "created": "2026-01-01T00:00:00Z"
-}
-```
-
-A newer schema is rejected. An older schema is rejected in 0.5.0 because no
-migration is implemented yet.
-
-### Card format
-
-```markdown
----
-id: example-project
-title: Example Project
-created: 2026-01-01T00:00:00Z
-updated: 2026-01-02T12:00:00Z
-tags: demo, docs
----
-
-# Example Project
-
-## Decisions
-
-- Use SQLite for local storage.
-```
-
-The filename is authoritative. If frontmatter `id` disagrees with the file
-stem, the file stem wins.
-
-### Index format
-
-`INDEX.md` is generated with three columns: project link, tags, updated date.
-The table is intentionally simple so it can be read by humans and agents
-without a YAML or database dependency.
 
 ### Audit format
 
-Each line is a JSON object with a timestamp, action, optional project, and
-metadata. Decision text is not copied into the audit log. Example:
-
-```json
-{"action": "remember", "added": true, "created": true, "project": "example-project", "tags": ["demo"], "ts": "2026-01-02T12:00:00Z"}
-```
+Each line is a JSON object linked to the previous line via `prev_hash` and
+sealed with `hash` (SHA-256 over canonical JSON without `hash`). Decision text
+is never copied into the audit log. `engramkeep doctor` verifies the full chain
+and flags any modified, deleted, or injected line as `tampered`.
 
 ## Invariants
 
 - Every user-controlled filename goes through `safe_join()`.
 - Every card and generated file is written through `atomic_write_text()`.
-- `append_text()` rejects symlinks.
+- `append_text()` rejects symlinks and non-regular files.
 - `scan_cards()` rejects symlinks and non-regular files.
-- Cards are redacted before write.
-- The store, CLI, and MCP modules import no networking or subprocess modules.
-  Only `dashboard.py` binds a loopback listener.
-- Destructive commands require `--yes`.
-- The installer is dry-run by default; `--apply` edits only inside managed blocks, rejects symlinks, and writes a timestamped backup plus `manifest.json`.
-- MCP uses stdio only, is read-only by default, and has no forget tool.
-- The MCP write tools exist only when the server is started with
-  `--allow-write`.
-- The dashboard binds to `127.0.0.1`, requires a per-session token, and
-  validates the Host header and any Origin on writes.
-- The dashboard renders card content as text and never mutates on GET.
-- Dashboard writes require `--allow-write` and `confirm: true`.
-
-## Extension points
-
-Future features must preserve the invariants above:
-
-- **MCP server (0.2.0, updated in 0.4.0):** stdio, newline-delimited JSON,
-  protocol version 2025-11-25, no network listener, read-only by default, and
-  an explicit `--allow-write` opt-in for the remember and record_fix tools.
-- **Dashboard (0.3.0, updated in 0.5.0):** bind to `127.0.0.1`, require a
-  per-session token, enforce a path jail, use strict CSP, render card and fix
-  content as text, and keep mutations POST-only behind `--allow-write`.
-- **Installer (0.5.0, implemented):** preview by default, back up before
-  changing agent configuration, update a managed block, never overwrite
-  unrelated content.
-- **Adapters (0.6.0):** explicit consent, documented source paths, read-only,
-  no upload.
-
-## Testing strategy
-
-- Unit tests for config resolution, path validation, redaction, card parsing,
-  and search.
-- Store tests use `tmp_path` and never touch the real user home.
-- CLI tests set `ENGRAMKEEP_HOME` and capture output.
-- MCP tests drive `serve()` with in-memory byte streams and cover protocol
-  negotiation, tool schemas, write gating, framing, size limits, and errors.
-- Dashboard tests start a real server on an ephemeral loopback port and use
-  `http.client` to cover token auth, Host and Origin checks, CSP, path
-  traversal, body limits, read-only defaults, and confirmation.
-- A repository hygiene test checks for personal paths, secrets, required
-  files, and unsafe artifacts.
-- CI runs on Windows, Linux, and macOS across supported Python versions.
+- Cards, superseded decisions, fixes, and imported candidates are redacted before write.
+- Destructive commands (`forget`, `trash --purge`) require `--yes`.
+- `engramkeep sync` never runs `git push` or `git add -A`, and refuses to commit unless `doctor` passes.
+- MCP uses stdio only, negotiates supported protocol versions, is read-only by default, and exposes no forget tool.
+- The dashboard binds to `127.0.0.1`, requires a per-session token, validates `Host` and `Origin`, renders card content via pure `textContent` DOM nodes (zero `innerHTML`), and mutates only via POST with `--allow-write` and `confirm: true`.

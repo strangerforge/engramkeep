@@ -13,7 +13,6 @@ from engramkeep.troubleshoot import (
     TroubleEntry,
     parse_registry,
     render_registry,
-    score_entry,
     search_entries,
 )
 
@@ -98,12 +97,14 @@ def test_search_fixes_without_query_lists_newest(store: Store) -> None:
     assert [hit.entry.project for hit in hits] == ["two", "one"]
 
 
-def test_registry_is_rewritten_atomically_and_dedupes_nothing(store: Store) -> None:
-    store.record_fix("error one", "fix one", project="demo")
-    store.record_fix("error one", "fix one", project="demo")
+def test_registry_is_rewritten_atomically_and_deduplicates_identical_fixes(store: Store) -> None:
+    first, first_added = store.record_fix_result("error one", "fix one", project="demo")
+    second, second_added = store.record_fix_result("error one", "fix one", project="demo")
     parsed = parse_registry(store.troubleshooting_path.read_text(encoding="utf-8"))
-    # Duplicate recording is allowed (each call is an explicit user/agent action).
-    assert len(parsed) == 2
+    assert first_added is True
+    assert second_added is False
+    assert second.dedup_key() == first.dedup_key()
+    assert len(parsed) == 1
 
 
 def test_parse_registry_tolerates_garbage_blocks() -> None:
@@ -165,7 +166,7 @@ def test_search_entries_limit() -> None:
     assert len(search_entries(entries, "same", limit=10)) == 10
 
 
-def test_score_entry_uses_word_boundaries() -> None:
+def test_search_entries_uses_word_boundaries() -> None:
     entry = TroubleEntry(
         project="Signal Dashboard",
         error="Error: error:0308010C:digital envelope routines::unsupported",
@@ -174,10 +175,10 @@ def test_score_entry_uses_word_boundaries() -> None:
         date="2026-10-13",
     )
     # "git" must not match inside "digital".
-    assert score_entry(entry, "git") == (0, [])
+    assert search_entries([entry], "git") == []
 
 
-def test_score_entry_prefers_specific_identifier() -> None:
+def test_search_entries_prefers_specific_identifier() -> None:
     specific = TroubleEntry(
         project="Ledger CLI",
         error="ModuleNotFoundError: No module named 'psycopg2'",
@@ -192,9 +193,10 @@ def test_score_entry_prefers_specific_identifier() -> None:
         workspace=None,
         date="2026-10-18",
     )
-    specific_score, _ = score_entry(specific, "psycopg2 python")
-    generic_score, _ = score_entry(generic, "psycopg2 python")
-    assert specific_score > generic_score
+    hits = search_entries([generic, specific], "psycopg2 python")
+    assert len(hits) == 2
+    assert hits[0].entry == specific
+    assert hits[0].score > hits[1].score
 
 
 def test_troubleshooting_in_export(store: Store) -> None:

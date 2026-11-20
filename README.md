@@ -12,12 +12,12 @@
 # Engramkeep
 
 [![CI](https://github.com/strangerforge/engramkeep/actions/workflows/ci.yml/badge.svg)](https://github.com/strangerforge/engramkeep/actions/workflows/ci.yml)
-[![Coverage: 85%](https://img.shields.io/badge/Coverage-85%25-brightgreen.svg)](https://github.com/strangerforge/engramkeep/actions/workflows/ci.yml)
+[![PyPI](https://img.shields.io/pypi/v/engramkeep.svg)](https://pypi.org/project/engramkeep/)
 [![Benchmark: 95.6% top-1](https://img.shields.io/badge/Benchmark-95.6%25%20top--1-blue.svg)](docs/BENCHMARK.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://www.python.org/)
 [![Dependencies: 0](https://img.shields.io/badge/Dependencies-0%20(stdlib)-brightgreen.svg)](pyproject.toml)
-[![MCP: 2025-11-25](https://img.shields.io/badge/MCP-2025--11--25-purple.svg)](#mcp)
+[![MCP: 2024-11-05..2025-11-25](https://img.shields.io/badge/MCP-2024--11--05..2025--11--25-purple.svg)](#mcp)
 
 **Local-first, Markdown-native memory for AI coding agents.**
 
@@ -26,10 +26,14 @@ Windsurf, Gemini CLI, Antigravity, or anything that can read `AGENTS.md` — the
 same persistent, human-readable project memory. It runs on the Python standard
 library alone.
 
-> **Status: 0.6.0 alpha.** The store, CLI (including `import --dry-run`),
-> MCP server, dashboard, troubleshooting registry, BM25 + phrase + bilingual
-> search, and the backed-up agent installer work. Cloud sync, encryption at rest,
-> and schema migrations are still ahead. See [docs/ROADMAP.md](docs/ROADMAP.md).
+> **Status: 1.0.0 stable.** Local-first Markdown store, layered project
+> (`.engramkeep/`) + global memory, ADR decision lifecycle (`supersede`,
+> `untag`, `trash`/`restore`), BM25 + quoted phrase + Turkish-aware bilingual
+> search, tamper-evident SHA-256 hash-chained `audit.log`, schema migrations
+> (`migrate`), doctor-gated allowlist Git sync (`sync`), multi-agent transcript
+> adapters (`import --interactive`), MCP tools/resources/prompts, modular
+> loopback dashboard, and the backed-up 10-agent installer (`--mcp`, `--skill`).
+> See [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ---
 
@@ -56,23 +60,24 @@ own.
 
 ---
 
-## What works in 0.6.0
+## What works in 1.0.0
 
 | Area | Status |
 | --- | --- |
-| Markdown store + generated index | Working |
-| CLI: `init`, `remember`, `search`, `show`, `list`, `recent`, `forget`, `export`, `reindex`, `doctor` | Working |
-| CLI: `fix` (record a solved problem), `fixes` (search solved problems) | Working |
-| CLI: `import` (read-only `--dry-run` default, `--apply` opt-in, `claude-jsonl` & `text`) | Working |
-| Secret redaction before write | Working |
-| Path traversal protection + atomic writes | Working |
-| Tests + CI on Linux, macOS, and Windows | 259 tests, 85% coverage |
-| MCP stdio server | Working; read-only by default, writes opt-in |
-| Web dashboard | Working; loopback + token, writes opt-in |
-| Troubleshooting registry (`TROUBLESHOOTING.md`) | Working; redacted, atomic, untrusted data |
-| BM25 + quoted phrase + bilingual (EN/TR) search | Working; deterministic, word-boundary matched |
-| Agent installer | Working; managed blocks, backups, uninstall |
-| Cloud/Git sync | Not included |
+| Markdown store + generated index + `py.typed` | Working |
+| Layered memory (`.engramkeep/` project store + global overlay) | Working |
+| Decision lifecycle (`remember`, `supersede`, `untag`, `forget --decision`, `trash`, `restore`) | Working |
+| Deduplicated troubleshooting registry (`fix`, `fixes`, `TROUBLESHOOTING.md`) | Working |
+| BM25 + quoted phrase + Turkish-aware & bilingual (EN/TR) search | Working |
+| Multi-agent transcript adapters (`claude-jsonl`, `cursor`, `opencode`, `codex`, `gemini`, `text`) + `import --interactive` | Working |
+| Tamper-evident SHA-256 hash-chained `audit.log` + `doctor --fix` | Working |
+| Schema migrations (`migrate --apply`, automatic backup & `--rollback`) | Working |
+| Safe allowlist local Git sync (`sync`, doctor-gated, no auto-push) | Working |
+| MCP stdio server (multi-version negotiation, tools, resources, prompts) | Working |
+| Modular web dashboard (`--open`, `POST /api/fixes`, `GET /api/export`, tag filters, text-only Markdown) | Working |
+| Agent installer (10 agents, 9 MCP configs, `--mcp-allow-write`, `--skill`) | Working |
+| Shell completion (`bash`, `zsh`, `fish`, `powershell`) | Working |
+| Secret redaction, path jail, atomic writes, advisory file locks | Working |
 
 ---
 
@@ -290,22 +295,30 @@ python scripts/benchmark_fix_registry.py --output docs/BENCHMARK.md
 
 | Command | Purpose |
 | --- | --- |
-| `engramkeep init` | Create the memory directory and starter files |
-| `engramkeep remember <project> "<decision>" [--tag TAG]` | Record a durable decision |
-| `engramkeep search "<query>" [--tag TAG] [--json]` | Search titles, tags, and card bodies (bilingual) |
+| `engramkeep init [--local]` | Create the global or project-local `.engramkeep/` store |
+| `engramkeep remember <project> "<decision>" [--tag TAG] [--local]` | Record a durable decision |
+| `engramkeep supersede <project> --old "..." --new "..." [--reason "..."]` | Replace a decision while keeping ADR history |
+| `engramkeep untag <project> --tag TAG` | Remove one or more tags from a project card |
+| `engramkeep search "<query>" [--tag TAG] [--project-store DIR] [--no-local] [--json]` | Search with BM25, phrases, and EN/TR + Turkish suffix matching |
 | `engramkeep show <project>` | Print a project card |
-| `engramkeep list` | List known projects |
+| `engramkeep list` | List known projects (layered when `.engramkeep/` is present) |
 | `engramkeep recent` | Print recent activity |
-| `engramkeep forget <project> --yes` | Move a card to `trash/` |
-| `engramkeep fix "<error>" --solution "<fix>" [--project NAME] [--workspace PATH]` | Record a resolved problem |
+| `engramkeep forget <project> [--decision "..."] --yes` | Move a card to `trash/` or remove one decision |
+| `engramkeep trash [--purge --yes]` | List or purge trashed cards |
+| `engramkeep restore <project> [--file NAME] [--force]` | Restore a trashed card back to `projects/` |
+| `engramkeep fix "<error>" --solution "<fix>" [--project NAME] [--workspace PATH] [--local]` | Record a deduplicated resolved problem |
 | `engramkeep fixes [query] [--limit N] [--json]` | Search the troubleshooting registry |
+| `engramkeep import --file PATH [--format auto\|claude-jsonl\|cursor\|opencode\|codex\|gemini\|text] [--apply\|--interactive]` | Preview or import redacted candidates from agent transcripts |
 | `engramkeep export [--output FILE]` | Export all cards and fixes as JSON |
 | `engramkeep reindex` | Regenerate `INDEX.md` |
-| `engramkeep doctor [--json]` | Check the local store, including the registry |
-| `engramkeep path` | Print the active memory directory |
-| `engramkeep install [--list] [--agent NAME] [--apply] [--uninstall] [--scope auto\|global\|project] [--project-dir PATH] [--mcp]` | Plan or apply agent integration |
-| `engramkeep mcp [--status] [--allow-write]` | Run the MCP stdio server, or print its status |
-| `engramkeep dashboard [--status] [--port PORT] [--allow-write]` | Run the local dashboard, or print its status |
+| `engramkeep doctor [--fix] [--json]` | Verify store health & SHA-256 audit chain, or safely repair |
+| `engramkeep migrate [--apply \| --rollback DIR]` | Plan, apply, or roll back schema migrations & audit sealing |
+| `engramkeep sync [--init \| --status \| --commit [-m MSG]]` | Doctor-gated allowlist local Git sync (never auto-pushes) |
+| `engramkeep path [--local]` | Print the active memory directory |
+| `engramkeep completion <bash\|zsh\|fish\|powershell>` | Print shell completion script |
+| `engramkeep install [--list] [--agent NAME] [--apply] [--uninstall] [--mcp] [--mcp-allow-write] [--skill]` | Plan or apply agent integration, MCP config, and `SKILL.md` |
+| `engramkeep mcp [--status] [--allow-write]` | Run the MCP stdio server (tools, resources, prompts) |
+| `engramkeep dashboard [--status] [--port PORT] [--allow-write] [--open]` | Run the local dashboard (optionally opening the browser) |
 
 ---
 
@@ -411,7 +424,7 @@ Different projects approach agent memory from different angles. Here is how Engr
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | **Storage format** | Plain Markdown files on local disk | Local Markdown knowledge base + SQLite index | Local Markdown + Milvus vector index | Managed cloud or local vector/graph DB | Static prompt / notes files |
 | **Runtime dependencies** | **0** (Python standard library only) | Python + external packages (`fastmcp`, `sqlalchemy`, etc.) | Embeddings + Milvus / vector libraries | Cloud API keys or LLM + vector DB stack | None (text editor) |
-| **Search mechanism** | Deterministic keyword + recency + EN/TR concept expansion | SQLite FTS / knowledge-graph traversal | Dense vector embeddings + hybrid search | LLM extraction + vector/graph semantic recall | Agent grep or full context stuffing |
+| **Search mechanism** | Field-weighted BM25 + quoted phrases + Turkish suffix & EN/TR concept expansion | SQLite FTS / knowledge-graph traversal | Dense vector embeddings + hybrid search | LLM extraction + vector/graph semantic recall | Agent grep or full context stuffing |
 | **Audit & Versioning** | Native `git diff`, open in any editor | Markdown files + local SQLite DB | Markdown files + binary vector index | Hosted dashboard or DB rows | Full `git diff` |
 | **Security & Redaction** | Built-in secret scrubber (`[REDACTED]`) & path jail | Local file permissions | Local file permissions | Cloud / application-level policy | Manual diligence |
 | **Fix Registry** | Built-in cross-agent troubleshooting catalog (`TROUBLESHOOTING.md`) | No dedicated fix registry | No dedicated fix registry | No dedicated fix registry | Freeform notes |
@@ -467,19 +480,26 @@ engramkeep/
 ├── LICENSE
 ├── pyproject.toml
 ├── src/engramkeep/
-│   ├── cli.py
-│   ├── config.py
-│   ├── concepts.py        # bilingual EN/TR concept expansion
-│   ├── models.py
-│   ├── paths.py
-│   ├── redact.py
-│   ├── search.py
-│   ├── store.py
-│   ├── troubleshoot.py    # troubleshooting registry (TROUBLESHOOTING.md)
-│   ├── mcp_server.py      # MCP stdio server
-│   ├── dashboard.py       # hardened local dashboard
-│   ├── installer.py       # backed-up, managed-block agent installer
-│   └── adapters/          # future transcript adapters
+│   ├── audit.py           # SHA-256 hash-chained audit log verification
+│   ├── cli.py             # CLI & shell completions
+│   ├── config.py          # global & .engramkeep/ project store discovery
+│   ├── concepts.py        # Turkish-safe folding & EN/TR concept expansion
+│   ├── importer.py        # consent-based & interactive transcript import
+│   ├── installer.py       # managed-block, MCP, and SKILL.md installer
+│   ├── mcp_server.py      # MCP stdio server (tools, resources, prompts)
+│   ├── migrations.py      # schema migration & rollback framework
+│   ├── models.py          # cards, frontmatter, ADR supersede/untag
+│   ├── paths.py           # path jail, atomic writes, file locks
+│   ├── py.typed           # PEP 561 type marker
+│   ├── redact.py          # secret & PII redaction
+│   ├── search.py          # BM25, phrase, and Turkish-aware search
+│   ├── store.py           # store, trash/restore, doctor --fix, LayeredStore
+│   ├── sync.py            # doctor-gated allowlist local Git sync
+│   ├── troubleshoot.py    # deduplicated troubleshooting registry
+│   ├── adapters/          # claude-jsonl, cursor, opencode, codex, gemini, text
+│   ├── dashboard.py       # hardened local dashboard server
+│   ├── dashboard_assets/  # modular index.html, app.js, style.css, logo.svg
+│   └── data/              # bundled SKILL.md
 ├── assets/                # logo.svg, logo-dark.svg, logo-*.png, social-preview.png, dashboard.png, demo.gif
 ├── examples/
 │   ├── brain/             # minimal valid store
@@ -488,10 +508,11 @@ engramkeep/
 │   └── fix-registry/      # benchmark corpus
 ├── scripts/
 │   ├── build_demo_brain.py
-│   └── benchmark_fix_registry.py
+│   ├── benchmark_fix_registry.py
+│   └── check_repo_hygiene.py
 ├── skills/engramkeep/SKILL.md
 ├── templates/
-├── tests/                 # 254 tests
+├── tests/                 # comprehensive unit, CLI, MCP, dashboard, sync & migration tests
 ├── docs/
 └── .github/
 ```

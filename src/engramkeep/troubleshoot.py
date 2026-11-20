@@ -17,7 +17,7 @@ import re
 from dataclasses import dataclass
 from typing import Literal
 
-from .concepts import expand_query_terms
+from .concepts import expand_query_terms, prefix_pattern, tr_lower
 from .paths import strip_control_chars
 
 TROUBLESHOOTING_NAME = "TROUBLESHOOTING.md"
@@ -47,6 +47,14 @@ class TroubleEntry:
     workspace: str | None
     date: str
 
+    def dedup_key(self) -> tuple[str, str, str]:
+        """Return a normalized identity key for duplicate detection."""
+        return (
+            " ".join(tr_lower(self.project).split()),
+            " ".join(tr_lower(self.error).split()),
+            " ".join(tr_lower(self.fix).split()),
+        )
+
     def to_dict(self) -> dict[str, object]:
         """Return a JSON-serializable representation."""
         return {
@@ -64,11 +72,14 @@ class FixHit:
 
     entry: TroubleEntry
     score: int
+    source: str | None = None
 
     def to_dict(self) -> dict[str, object]:
         """Return a JSON-serializable representation."""
         payload = self.entry.to_dict()
         payload["score"] = self.score
+        if self.source is not None:
+            payload["source"] = self.source
         return payload
 
 
@@ -146,70 +157,12 @@ def parse_registry(text: str) -> list[TroubleEntry]:
 
 
 def _tokens(text: str) -> list[str]:
-    return [token for token in _TOKEN_SPLIT.split(text.lower()) if token]
-
-
-def _has_term(text: str, term: str) -> bool:
-    """Match a term on word boundaries, not inside unrelated words.
-
-    Substring matching makes ``git`` match ``digital`` and ``api`` match
-    ``capital``. Boundaries keep literal matches honest; the concept bonus has
-    its own boundary check.
-    """
-    pattern = r"(?<![\w])" + re.escape(term) + r"(?![\w])"
-    return re.search(pattern, text) is not None
-
-
-def score_entry(entry: TroubleEntry, query: str) -> tuple[int, list[str]]:
-    """Score an entry against a query. Returns ``(score, matched_query_tokens)``."""
-    query_tokens = list(dict.fromkeys(_tokens(query)))[:64]
-    if not query_tokens:
-        return 0, []
-
-    error = entry.error.lower()
-    fix = entry.fix.lower()
-    project = entry.project.lower()
-    workspace = (entry.workspace or "").lower()
-    haystack = f"{project}\n{workspace}\n{error}\n{fix}"
-
-    score = 0
-    matched: list[str] = []
-    for token in query_tokens:
-        token_score = 0
-        if _has_term(project, token):
-            token_score += 6
-        if _has_term(error, token):
-            token_score += 4
-        if _has_term(fix, token):
-            token_score += 2
-        if _has_term(workspace, token):
-            token_score += 1
-        if token_score:
-            # Identifiers with digits (psycopg2, TS2307, 0308010C) are more
-            # specific than a generic word such as "python" or "error".
-            if any(char.isdigit() for char in token):
-                token_score += 1
-            score += token_score
-            matched.append(token)
-
-    # Bilingual expansion: related EN/TR terms add a small bonus and never
-    # replace the literal query tokens. Word-boundary matching keeps short
-    # terms like "ui" or "db" from matching inside unrelated words.
-    expanded = expand_query_terms(query) - set(query_tokens)
-    bonus = 0
-    for term in expanded:
-        pattern = re.compile(r"(?<![\w])" + re.escape(term) + r"(?![\w])")
-        occurrences = len(pattern.findall(haystack))
-        if occurrences:
-            bonus += min(occurrences, 2)
-    score += min(bonus, 6)
-
-    return score, matched
+    return [token for token in _TOKEN_SPLIT.split(tr_lower(text)) if token]
 
 
 def _parse_fix_query(query: str) -> tuple[list[str], list[str]]:
     phrases = [
-        " ".join(match.lower().split())
+        " ".join(tr_lower(match).split())
         for match in re.findall(r'"([^"]+)"', query)
         if match.strip()
     ]
@@ -248,13 +201,14 @@ def search_entries(
 
     k1 = 1.5
     b = 0.75
+    prefix_weight = 0.55
     num_docs = len(entries)
     fields = [
         (
-            entry.project.lower(),
-            entry.error.lower(),
-            entry.fix.lower(),
-            (entry.workspace or "").lower(),
+            tr_lower(entry.project),
+            tr_lower(entry.error),
+            tr_lower(entry.fix),
+            tr_lower(entry.workspace or ""),
         )
         for entry in entries
     ]
@@ -273,16 +227,21 @@ def search_entries(
     token_patterns = [
         re.compile(r"(?<![\w])" + re.escape(tok) + r"(?![\w])") for tok in query_tokens
     ]
+    token_prefix_patterns = [prefix_pattern(tok) for tok in query_tokens]
     phrase_patterns = [re.compile(r"(?<![\w])" + re.escape(ph) + r"(?![\w])") for ph in phrases]
 
-    df_counts = [
-        sum(
-            1
-            for proj, err, fx, ws in fields
-            if pat.search(proj) or pat.search(err) or pat.search(fx) or pat.search(ws)
-        )
-        for pat in token_patterns
-    ]
+    df_counts: list[int] = []
+    for pat, pref in zip(token_patterns, token_prefix_patterns, strict=True):
+        df = 0
+        for proj, err, fx, ws in fields:
+            matched = pat.search(proj) or pat.search(err) or pat.search(fx) or pat.search(ws)
+            if not matched and pref is not None:
+                matched = (
+                    pref.search(proj) or pref.search(err) or pref.search(fx) or pref.search(ws)
+                )
+            if matched:
+                df += 1
+        df_counts.append(df)
     idfs = [math.log(1.0 + (num_docs - df + 0.5) / (df + 0.5)) for df in df_counts]
 
     expanded = expand_query_terms(query) - (set(query_tokens) | set(phrases))
@@ -299,13 +258,22 @@ def search_entries(
         bm25 = 0.0
         matched_tokens = 0
 
-        for tok, pat, idf in zip(query_tokens, token_patterns, idfs, strict=True):
+        for tok, pat, pref, idf in zip(
+            query_tokens, token_patterns, token_prefix_patterns, idfs, strict=True
+        ):
             tf = (
                 4.0 * len(pat.findall(proj))
                 + 3.0 * len(pat.findall(err))
                 + 1.5 * len(pat.findall(fx))
                 + 0.75 * len(pat.findall(ws))
             )
+            if pref is not None:
+                tf += prefix_weight * (
+                    4.0 * len(pref.findall(proj))
+                    + 3.0 * len(pref.findall(err))
+                    + 1.5 * len(pref.findall(fx))
+                    + 0.75 * len(pref.findall(ws))
+                )
             if tf > 0.0:
                 matched_tokens += 1
                 spec_bonus = 1.25 if any(ch.isdigit() for ch in tok) else 1.0

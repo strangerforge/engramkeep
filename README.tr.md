@@ -12,12 +12,12 @@
 # Engramkeep
 
 [![CI](https://github.com/strangerforge/engramkeep/actions/workflows/ci.yml/badge.svg)](https://github.com/strangerforge/engramkeep/actions/workflows/ci.yml)
-[![Kapsam: 85%](https://img.shields.io/badge/Coverage-85%25-brightgreen.svg)](https://github.com/strangerforge/engramkeep/actions/workflows/ci.yml)
+[![PyPI](https://img.shields.io/pypi/v/engramkeep.svg)](https://pypi.org/project/engramkeep/)
 [![Benchmark: 95.6% top-1](https://img.shields.io/badge/Benchmark-95.6%25%20top--1-blue.svg)](docs/BENCHMARK.md)
 [![Lisans: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://www.python.org/)
 [![Bağımlılık: 0](https://img.shields.io/badge/Dependencies-0%20(stdlib)-brightgreen.svg)](pyproject.toml)
-[![MCP: 2025-11-25](https://img.shields.io/badge/MCP-2025--11--25-purple.svg)](#mcp)
+[![MCP: 2024-11-05..2025-11-25](https://img.shields.io/badge/MCP-2024--11--05..2025--11--25-purple.svg)](#mcp)
 
 **Yapay zeka kod ajanları için yerel-öncelikli, Markdown tabanlı kalıcı hafıza.**
 
@@ -25,10 +25,13 @@ Engramkeep; Codex, Claude Code, OpenCode, Cursor, Windsurf, Gemini CLI,
 Antigravity veya `AGENTS.md` okuyabilen her ajanın aynı proje hafızasını
 kullanmasını sağlar. Yalnızca Python standart kütüphanesiyle çalışır.
 
-> **Durum: 0.6.0 alpha.** Depo, CLI (`import --dry-run` dahil), MCP sunucusu,
-> panel, arıza giderme kayıt defteri, BM25 + tam ifade + çift dilli arama ve
-> yedekli ajan kurulumu çalışıyor. Bulut senkronizasyonu, şifreli depolama ve
-> şema geçişleri hâlâ yol haritasında. Bkz. [docs/ROADMAP.md](docs/ROADMAP.md).
+> **Durum: 1.0.0 kararlı.** Yerel-öncelikli Markdown deposu, katmanlı proje
+> (`.engramkeep/`) + global hafıza, ADR karar yaşam döngüsü (`supersede`,
+> `untag`, `trash`/`restore`), BM25 + tam ifade + Türkçe uyumlu çift dilli arama,
+> SHA-256 hash zincirli `audit.log`, şema göçü (`migrate`), doctor kontrollü
+> allowlist Git senkronizasyonu (`sync`), çoklu ajan transkript adaptörleri
+> (`import --interactive`), MCP tools/resources/prompts, modüler yerel panel
+> ve 10 ajan için yedekli kurulum (`--mcp`, `--skill`). Bkz. [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ---
 
@@ -55,23 +58,24 @@ denetlenebilir bir hafıza katmanıdır.
 
 ---
 
-## 0.6.0'da ne çalışıyor?
+## 1.0.0'da ne çalışıyor?
 
 | Alan | Durum |
 | --- | --- |
-| Markdown deposu + üretilen indeks | Çalışıyor |
-| CLI: `init`, `remember`, `search`, `show`, `list`, `recent`, `forget`, `export`, `reindex`, `doctor` | Çalışıyor |
-| CLI: `fix` (çözülmüş sorunu kaydet), `fixes` (çözülen sorunları ara) | Çalışıyor |
-| CLI: `import` (varsayılan `--dry-run`, `--apply` onaylı, `claude-jsonl` ve `text`) | Çalışıyor |
-| Yazma öncesi sır temizleme | Çalışıyor |
-| Yol geçişi koruması + atomik yazma | Çalışıyor |
-| Linux, macOS ve Windows'ta testler + CI | 259 test, %85 kapsam |
-| MCP stdio sunucusu | Çalışıyor; varsayılan salt-okunur, yazma opt-in |
-| Web paneli | Çalışıyor; loopback + token, yazma opt-in |
-| Arıza giderme kayıt defteri (`TROUBLESHOOTING.md`) | Çalışıyor; sır temizlemeli, atomik, güvenilmeyen veri |
-| BM25 + tam ifade + çift dilli (EN/TR) arama | Çalışıyor; deterministik, kelime sınırlı eşleşme |
-| Ajan kurulumu | Çalışıyor; managed block, yedek, kaldırma |
-| Bulut/Git senkronizasyonu | Kapsam dışı |
+| Markdown deposu + üretilen indeks + `py.typed` | Çalışıyor |
+| Katmanlı hafıza (`.engramkeep/` proje deposu + global katman) | Çalışıyor |
+| Karar yaşam döngüsü (`remember`, `supersede`, `untag`, `forget --decision`, `trash`, `restore`) | Çalışıyor |
+| Mükerrer korumalı arıza giderme kayıt defteri (`fix`, `fixes`, `TROUBLESHOOTING.md`) | Çalışıyor |
+| BM25 + tam ifade + Türkçe ek/yumuşama ve çift dilli (EN/TR) arama | Çalışıyor |
+| Çoklu ajan transkript adaptörleri (`claude-jsonl`, `cursor`, `opencode`, `codex`, `gemini`, `text`) + `import --interactive` | Çalışıyor |
+| SHA-256 hash zincirli `audit.log` + `doctor --fix` | Çalışıyor |
+| Şema göçü (`migrate --apply`, otomatik yedek ve `--rollback`) | Çalışıyor |
+| Güvenli allowlist yerel Git senkronizasyonu (`sync`, doctor kapılı, otomatik push yok) | Çalışıyor |
+| MCP stdio sunucusu (çoklu sürüm müzakeresi, tools, resources, prompts) | Çalışıyor |
+| Modüler web paneli (`--open`, `POST /api/fixes`, `GET /api/export`, etiket filtreleri, metin-odaklı Markdown) | Çalışıyor |
+| Ajan kurulumu (10 ajan, 9 MCP yapılandırması, `--mcp-allow-write`, `--skill`) | Çalışıyor |
+| Kabuk otomatik tamamlama (`bash`, `zsh`, `fish`, `powershell`) | Çalışıyor |
+| Sır temizleme, yol hapsi, atomik yazma ve dosya kilidi | Çalışıyor |
 
 ---
 
@@ -287,22 +291,30 @@ python scripts/benchmark_fix_registry.py --output docs/BENCHMARK.md
 
 | Komut | Amaç |
 | --- | --- |
-| `engramkeep init` | Hafıza dizinini ve başlangıç dosyalarını oluşturur |
-| `engramkeep remember <proje> "<karar>" [--tag ETIKET]` | Kalıcı bir karar kaydeder |
-| `engramkeep search "<sorgu>" [--tag ETIKET] [--json]` | Başlık, etiket ve kart gövdesinde arar (çift dilli) |
+| `engramkeep init [--local]` | Global veya proje içi `.engramkeep/` hafıza dizinini oluşturur |
+| `engramkeep remember <proje> "<karar>" [--tag ETIKET] [--local]` | Kalıcı bir karar kaydeder |
+| `engramkeep supersede <proje> --old "..." --new "..." [--reason "..."]` | Eski kararı ADR geçmişini koruyarak yenisiyle değiştirir |
+| `engramkeep untag <proje> --tag ETIKET` | Proje kartından bir veya daha fazla etiketi kaldırır |
+| `engramkeep search "<sorgu>" [--tag ETIKET] [--project-store DIR] [--no-local] [--json]` | BM25, tam ifade ve Türkçe/İngilizce kavram araması yapar |
 | `engramkeep show <proje>` | Proje kartını yazdırır |
-| `engramkeep list` | Kayıtlı projeleri listeler |
+| `engramkeep list` | Kayıtlı projeleri listeler (`.engramkeep/` varsa katmanlı) |
 | `engramkeep recent` | Son aktiviteleri yazdırır |
-| `engramkeep forget <proje> --yes` | Kartı `trash/` dizinine taşır |
-| `engramkeep fix "<hata>" --solution "<çözüm>" [--project AD] [--workspace YOL]` | Çözülmüş bir sorunu kaydeder |
+| `engramkeep forget <proje> [--decision "..."] --yes` | Kartı `trash/` dizinine taşır veya tek kararı kaldırır |
+| `engramkeep trash [--purge --yes]` | Çöpteki kartları listeler veya kalıcı olarak temizler |
+| `engramkeep restore <proje> [--file AD] [--force]` | Çöpteki kartı `projects/` altına geri getirir |
+| `engramkeep fix "<hata>" --solution "<çözüm>" [--project AD] [--workspace YOL] [--local]` | Mükerrer korumalı olarak çözülmüş bir sorunu kaydeder |
 | `engramkeep fixes [sorgu] [--limit N] [--json]` | Arıza giderme kayıt defterinde arar |
+| `engramkeep import --file YOL [--format auto\|claude-jsonl\|cursor\|opencode\|codex\|gemini\|text] [--apply\|--interactive]` | Ajan transkriptlerinden redakte edilmiş karar ve çözümleri çıkarır |
 | `engramkeep export [--output DOSYA]` | Tüm kartları ve kayıtları JSON olarak dışa aktarır |
 | `engramkeep reindex` | `INDEX.md` dosyasını yeniden üretir |
-| `engramkeep doctor [--json]` | Yerel depoyu, kayıt defteri dahil, kontrol eder |
-| `engramkeep path` | Aktif hafıza dizinini yazdırır |
-| `engramkeep install [--list] [--agent AD] [--apply] [--uninstall] [--scope auto\|global\|project] [--project-dir YOL] [--mcp]` | Ajan entegrasyonunu planlar veya uygular |
-| `engramkeep mcp [--status] [--allow-write]` | MCP stdio sunucusunu çalıştırır veya durumunu yazdırır |
-| `engramkeep dashboard [--status] [--port PORT] [--allow-write]` | Yerel paneli çalıştırır veya durumunu yazdırır |
+| `engramkeep doctor [--fix] [--json]` | Depo sağlığını ve SHA-256 denetim zincirini kontrol eder veya onarır |
+| `engramkeep migrate [--apply \| --rollback DIR]` | Şema göçlerini ve denetim zinciri mühürlemeyi planlar/uygular/geri alır |
+| `engramkeep sync [--init \| --status \| --commit [-m MSG]]` | Doctor kapılı allowlist yerel Git senkronizasyonu (otomatik push yok) |
+| `engramkeep path [--local]` | Aktif hafıza dizinini yazdırır |
+| `engramkeep completion <bash\|zsh\|fish\|powershell>` | Kabuk tamamlama betiği üretir |
+| `engramkeep install [--list] [--agent AD] [--apply] [--uninstall] [--mcp] [--mcp-allow-write] [--skill]` | Ajan kurallarını, MCP yapılandırmasını ve `SKILL.md` dosyasını kurar |
+| `engramkeep mcp [--status] [--allow-write]` | MCP stdio sunucusunu çalıştırır (tools, resources, prompts) |
+| `engramkeep dashboard [--status] [--port PORT] [--allow-write] [--open]` | Yerel paneli çalıştırır (isteğe bağlı tarayıcı açar) |
 
 ---
 
@@ -407,7 +419,7 @@ Farklı projeler yapay zeka ajan hafızasına farklı açılardan yaklaşır. En
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | **Depolama biçimi** | Yerel diskte düz Markdown dosyaları | Yerel Markdown bilgi tabanı + SQLite indeksi | Yerel Markdown + Milvus vektör indeksi | Bulut veya yerel vektör/graf DB | Statik kural / not dosyaları |
 | **Çalışma bağımlılığı** | **0** (Sadece Python standart kütüphanesi) | Python + harici paketler (`fastmcp`, `sqlalchemy` vb.) | Embedding modelleri + Milvus / vektör kütüphaneleri | Bulut API anahtarı veya LLM + vektör DB | Yok (metin editörü) |
-| **Arama mekanizması** | Deterministik anahtar kelime + güncellik + TR/EN kavram genişletme | SQLite FTS / bilgi grafiği gezintisi | Yoğun vektör embedding'leri + hibrit arama | LLM çıkarımı + vektör/graf anlamsal arama | Ajan grep'i veya tüm dosyayı context'e yükleme |
+| **Arama mekanizması** | Alan ağırlıklı BM25 + tam ifade + Türkçe ek/yumuşama ve TR/EN kavram genişletme | SQLite FTS / bilgi grafiği gezintisi | Yoğun vektör embedding'leri + hibrit arama | LLM çıkarımı + vektör/graf anlamsal arama | Ajan grep'i veya tüm dosyayı context'e yükleme |
 | **Denetim ve Sürümleme** | Doğrudan `git diff`, her editörle açılır | Markdown dosyaları + yerel SQLite DB | Markdown dosyaları + ikili vektör indeksi | Bulut paneli veya DB satırları | Doğrudan `git diff` |
 | **Güvenlik ve Gizlilik** | Otomatik sır temizleme (`[REDACTED]`) ve yol hapsi | Yerel dosya izinleri | Yerel dosya izinleri | Bulut / uygulama politikası | Tamamen manuel dikkat |
 | **Hata Kayıt Defteri** | Dahili, çapraz ajan arıza-çözüm kataloğu (`TROUBLESHOOTING.md`) | Özel arıza kaydı yok | Özel arıza kaydı yok | Özel arıza kaydı yok | Serbest notlar |
@@ -462,19 +474,26 @@ engramkeep/
 ├── LICENSE
 ├── pyproject.toml
 ├── src/engramkeep/
-│   ├── cli.py
-│   ├── config.py
-│   ├── concepts.py        # çift dilli EN/TR kavram genişletmesi
-│   ├── models.py
-│   ├── paths.py
-│   ├── redact.py
-│   ├── search.py
-│   ├── store.py
-│   ├── troubleshoot.py    # arıza kayıt defteri (TROUBLESHOOTING.md)
-│   ├── mcp_server.py      # MCP stdio sunucusu
-│   ├── dashboard.py       # sertleştirilmiş yerel panel
-│   ├── installer.py       # yedekli, managed-block ajan kurulumu
-│   └── adapters/          # gelecekteki transkript adaptörleri
+│   ├── audit.py           # SHA-256 hash zincirli denetim kaydı doğrulama
+│   ├── cli.py             # CLI ve kabuk tamamlama
+│   ├── config.py          # global ve .engramkeep/ proje deposu çözümü
+│   ├── concepts.py        # Türkçe uyumlu harf katlama & EN/TR kavram genişletme
+│   ├── importer.py        # onaylı ve etkileşimli transkript içe aktarımı
+│   ├── installer.py       # managed-block, MCP ve SKILL.md kurulumu
+│   ├── mcp_server.py      # MCP stdio sunucusu (tools, resources, prompts)
+│   ├── migrations.py      # şema göç ve geri alma (rollback) çerçevesi
+│   ├── models.py          # kartlar, frontmatter, ADR supersede/untag
+│   ├── paths.py           # yol hapsi, atomik yazma, dosya kilidi
+│   ├── py.typed           # PEP 561 tip işareti
+│   ├── redact.py          # sır ve PII temizleme
+│   ├── search.py          # BM25, tam ifade ve Türkçe uyumlu arama
+│   ├── store.py           # depo, trash/restore, doctor --fix, LayeredStore
+│   ├── sync.py            # doctor kapılı allowlist yerel Git senkronizasyonu
+│   ├── troubleshoot.py    # mükerrer korumalı arıza kayıt defteri
+│   ├── adapters/          # claude-jsonl, cursor, opencode, codex, gemini, text
+│   ├── dashboard.py       # sertleştirilmiş yerel panel sunucusu
+│   ├── dashboard_assets/  # modüler index.html, app.js, style.css, logo.svg
+│   └── data/              # paket içi SKILL.md
 ├── assets/                # logo.svg, logo-dark.svg, logo-*.png, social-preview.png, dashboard.png, demo.gif
 ├── examples/
 │   ├── brain/             # minimal geçerli depo
@@ -483,10 +502,11 @@ engramkeep/
 │   └── fix-registry/      # kıyaslama korpusu
 ├── scripts/
 │   ├── build_demo_brain.py
-│   └── benchmark_fix_registry.py
+│   ├── benchmark_fix_registry.py
+│   └── check_repo_hygiene.py
 ├── skills/engramkeep/SKILL.md
 ├── templates/
-├── tests/                 # 254 test
+├── tests/                 # kapsamlı birim, CLI, MCP, panel, sync ve göç testleri
 ├── docs/
 └── .github/
 ```

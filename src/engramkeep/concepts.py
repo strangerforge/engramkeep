@@ -14,6 +14,7 @@ weight than the literal query tokens.
 from __future__ import annotations
 
 import re
+import unicodedata
 
 SEMANTIC_CONCEPTS: dict[str, tuple[str, ...]] = {
     "mobile": (
@@ -170,11 +171,61 @@ SEMANTIC_CONCEPTS: dict[str, tuple[str, ...]] = {
 }
 
 _TOKEN_SPLIT = re.compile(r"[^\w/.@-]+", re.UNICODE)
+_MIN_PREFIX_LEN = 4
+_MIN_SUBSTRING_LEN = 3
+_SOFTENING_MAP = {
+    "k": "kğ",
+    "p": "pb",
+    "ç": "çc",
+    "t": "td",
+}
+
+
+def tr_lower(text: str) -> str:
+    """Lowercase text cleanly for English and Turkish without combining dots.
+
+    Python's ``"İstanbul".lower()`` produces ``"i\\u0307stanbul"`` (with a
+    combining dot above), which breaks exact matching against ``"istanbul"``.
+    Mapping ``İ`` before lowercasing and stripping stray combining dots keeps
+    both Turkish and English identifiers consistent.
+    """
+    if not text:
+        return ""
+    folded = text.replace("İ", "i").lower().replace("i\u0307", "i")
+    return unicodedata.normalize("NFC", folded)
+
+
+def prefix_pattern(term: str) -> re.Pattern[str] | None:
+    """Return a bounded suffix-tolerant regex for Turkish/agglutinative terms.
+
+    Returns ``None`` for short terms (fewer than 4 characters) or multi-word
+    phrases so short English tokens such as ``git`` or ``api`` never match
+    inside unrelated words.
+    """
+    if len(term) < _MIN_PREFIX_LEN or not term.isalpha():
+        return None
+    last = term[-1]
+    if last in _SOFTENING_MAP:
+        stem = re.escape(term[:-1]) + f"[{_SOFTENING_MAP[last]}]"
+    else:
+        stem = re.escape(term)
+    return re.compile(r"(?<![\w])" + stem + r"[\w]{1,6}(?![\w])")
+
+
+def _matches_prefix(token: str, term: str) -> bool:
+    if len(term) < _MIN_PREFIX_LEN or len(token) <= len(term):
+        return False
+    if token.startswith(term):
+        return True
+    last = term[-1]
+    if last in _SOFTENING_MAP and token.startswith(term[:-1]):
+        return token[len(term) - 1] in _SOFTENING_MAP[last]
+    return False
 
 
 def expand_query_terms(query: str) -> set[str]:
     """Return the normalized query terms plus matching EN/TR concept terms."""
-    normalized = " ".join(query.lower().split())
+    normalized = " ".join(tr_lower(query).split())
     if not normalized:
         return set()
 
@@ -193,6 +244,19 @@ def expand_query_terms(query: str) -> set[str]:
 def _term_matches(term: str, normalized: str, tokens: set[str]) -> bool:
     if term in tokens:
         return True
-    # Substring match in both directions so "mobil" finds "mobile"-family
-    # entries and multi-word terms like "github actions" still match.
-    return term in normalized or normalized in term
+    # Multi-word concept terms (e.g. "github actions", "ön yüz") match on
+    # word boundaries inside the normalized query.
+    if " " in term:
+        return re.search(r"(?<![\w])" + re.escape(term) + r"(?![\w])", normalized) is not None
+    # Agglutinative / inflected queries (e.g. "veritabanında", "önbelleği")
+    # match concept stems of length >= 4.
+    if any(_matches_prefix(token, term) for token in tokens):
+        return True
+    # Short queries (e.g. "io", "in", "ar") must not trigger unrelated
+    # families via loose substring containment.
+    if len(normalized) < _MIN_SUBSTRING_LEN:
+        return False
+    return any(
+        len(token) >= _MIN_PREFIX_LEN and len(term) >= _MIN_PREFIX_LEN and term.startswith(token)
+        for token in tokens
+    )

@@ -7,10 +7,86 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Planned
+## [1.0.0] - 2026-11-20
 
-- Schema migrations.
-- Optional encryption at rest with a user-supplied key.
+### Added
+
+- **Fix deduplication & trash lifecycle (`store.py`, `cli.py`):**
+  - Deduplicated `record_fix()` / `record_fix_result()` by normalized
+    `(project, error, fix)` so repeated CLI calls or re-running
+    `engramkeep import --apply` never creates duplicate entries in
+    `TROUBLESHOOTING.md`.
+  - Added `engramkeep trash [--purge --yes]` and `engramkeep restore <project> [--file NAME] [--force]`
+    for recoverable trash management.
+- **Turkish-aware search & concept precision (`concepts.py`, `search.py`, `troubleshoot.py`):**
+  - Added `tr_lower()` Turkish-safe case folding (eliminating Python's
+    `İ -> i\u0307` combining-dot mismatch).
+  - Added length threshold (`>= 3`) in `concepts.py` so short queries (`io`,
+    `in`, `ar`) no longer over-expand unrelated concept families.
+  - Added bounded, lower-weight agglutinative prefix + consonant-softening
+    matching (`veritabanı` -> `veritabanında`, `önbellek` -> `önbelleği`).
+- **Store repair (`engramkeep doctor --fix`):**
+  - Safely repairs missing store files/directories, out-of-sync `INDEX.md`,
+    broad POSIX permissions, and leftover `.*.tmp` files with automatic backups
+    under `backups/doctor/`, without deleting malformed or unredacted user files.
+- **Layered project + global memory (`config.py`, `store.py`, `cli.py`, `mcp_server.py`):**
+  - Added optional project-local `.engramkeep/` store (`engramkeep init --local`,
+    `--local` writes, `--project-store`, `--no-local`) and `LayeredStore` read
+    overlay with project precedence and explicit `source` attribution.
+- **Decision lifecycle (`models.py`, `store.py`, `cli.py`, `mcp_server.py`):**
+  - Added `engramkeep supersede <project> --old ... --new ... [--reason ...]`
+    (and MCP `engramkeep_supersede`) to replace decisions while preserving ADR
+    history under `## Superseded`.
+  - Added `engramkeep untag <project> --tag ...` and single-decision removal
+    via `engramkeep forget <project> --decision ... --yes`.
+- **MCP Resources, Prompts & multi-version negotiation (`mcp_server.py`):**
+  - Negotiates protocol versions `2024-11-05`, `2025-03-26`, `2025-06-18`, and
+    `2025-11-25`.
+  - Exposes `resources/list`, `resources/templates/list`, and `resources/read`
+    for `engramkeep://projects/<id>`, `engramkeep://index`,
+    `engramkeep://troubleshooting`, and `engramkeep://recent` with untrusted-data
+    framing.
+  - Exposes `prompts/list` and `prompts/get` (`session-start`,
+    `post-mortem-fix`, `decision-review`).
+- **Expanded installer (`installer.py`, `data/SKILL.md`):**
+  - Added MCP configuration targets for Windsurf, Gemini CLI, Antigravity,
+    Codex, Cline, and Roo Code (9 of 10 agents).
+  - Added `--mcp-allow-write` opt-in, portable `engramkeep` PATH command
+    preference over ephemeral `sys.executable`, and `--skill` to install or
+    uninstall the bundled `SKILL.md`.
+- **Modular & enhanced dashboard (`dashboard.py`, `dashboard_assets/`):**
+  - Split HTML/JS/CSS/SVG assets into `src/engramkeep/dashboard_assets/`.
+  - Added opt-in `POST /api/fixes` with UI form, `GET /api/export` with
+    one-click download, clickable tag filter pills, copy-Markdown button,
+    `engramkeep dashboard --open`, and a pure `textContent` structured Markdown
+    renderer (zero `innerHTML`).
+- **Schema migration framework (`migrations.py`, `engramkeep migrate`):**
+  - Dry-run by default; `--apply` takes a snapshot under `backups/migrations/`,
+    upgrades legacy v0 stores to v1, seals legacy unchained `audit.log` files,
+    auto-rolls back on error, and supports manual `--rollback BACKUP_DIR`.
+- **Tamper-evident SHA-256 hash-chained `audit.log` (`audit.py`):**
+  - Links every new audit record via `prev_hash` and `hash` (zero runtime
+    dependencies) and verifies the full chain in `engramkeep doctor`.
+- **Safe allowlist local Git sync (`sync.py`, `engramkeep sync`):**
+  - Doctor-gated local commits tracking only allowlisted files (`meta.json`,
+    `INDEX.md`, `TROUBLESHOOTING.md`, `projects/*.md`, `.gitignore`); never runs
+    `git add -A` or `git push`.
+- **Multi-agent transcript adapters & interactive import (`adapters/`, `importer.py`):**
+  - Replaced the empty `adapters/` stub with modular read-only adapters for
+    `claude-jsonl`, `cursor`, `opencode`, `codex`, `gemini`, and `text`, added
+    natural-language decision/fix extraction, and added `import --interactive`
+    (`[y/n/a/q]` review).
+- **PEP 561 & Shell completion:**
+  - Shipped `src/engramkeep/py.typed` and added `engramkeep completion <bash|zsh|fish|powershell>`.
+
+### Changed
+
+- Removed legacy duplicate `score_entry()` in `troubleshoot.py`; all registry
+  ranking now uses the single BM25 + phrase + bilingual engine.
+- Synchronized `README.md`, `README.tr.md`, `AGENTS.md`, `SKILL.md`,
+  `docs/ARCHITECTURE.md`, `docs/THREAT_MODEL.md`, and `docs/ROADMAP.md` for
+  1.0.0.
+- Rebuilt `examples/demo-brain/` with SHA-256 hash-chained `audit.log`.
 
 ## [0.6.0] - 2026-11-18
 

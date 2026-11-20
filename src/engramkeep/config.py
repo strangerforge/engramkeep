@@ -15,10 +15,12 @@ from collections.abc import Mapping
 from pathlib import Path
 
 from .errors import ConfigError
+from .paths import is_link_or_junction
 
 APP_NAME = "engramkeep"
 DISPLAY_NAME = "Engramkeep"
 ENV_HOME = "ENGRAMKEEP_HOME"
+PROJECT_STORE_DIR = ".engramkeep"
 SCHEMA_VERSION = 1
 
 
@@ -77,3 +79,23 @@ def resolve_home(
     if resolved.exists() and not resolved.is_dir():
         raise ConfigError(f"{source} is not a directory: {resolved}")
     return resolved
+
+
+def find_project_store(start_dir: str | os.PathLike[str] | None = None) -> Path | None:
+    """Walk upward from ``start_dir`` looking for an initialized ``.engramkeep`` store.
+
+    Symlinked or junctioned ``.engramkeep`` directories and ``meta.json`` files
+    are ignored rather than followed.
+    """
+    current = Path(start_dir if start_dir is not None else Path.cwd()).expanduser().resolve()
+    if current.is_file():
+        current = current.parent
+
+    for directory in (current, *current.parents):
+        candidate = directory / PROJECT_STORE_DIR
+        if is_link_or_junction(candidate) or not candidate.is_dir():
+            continue
+        meta = candidate / "meta.json"
+        if not is_link_or_junction(meta) and meta.is_file():
+            return candidate.resolve()
+    return None

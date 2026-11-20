@@ -23,6 +23,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT / "src") not in sys.path:
     sys.path.insert(0, str(ROOT / "src"))
 
+from engramkeep.audit import seal_audit_sequence  # noqa: E402
 from engramkeep.models import Card  # noqa: E402
 from engramkeep.paths import atomic_write_text  # noqa: E402
 from engramkeep.store import Store  # noqa: E402
@@ -127,7 +128,8 @@ def _audit_lines(cards: list[dict[str, Any]], fixes: list[dict[str, Any]]) -> li
         if card["updated"] > card["created"]
     )
     events.sort(key=lambda event: str(event["ts"]))
-    return [json.dumps(event, ensure_ascii=False, sort_keys=True) for event in events]
+    sealed = seal_audit_sequence(events)
+    return [json.dumps(event, ensure_ascii=False, sort_keys=True) for event in sealed]
 
 
 def build(

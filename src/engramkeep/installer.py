@@ -10,6 +10,7 @@ content.
 from __future__ import annotations
 
 import hashlib
+import importlib.resources
 import json
 import os
 import re
@@ -63,7 +64,7 @@ alwaysApply: true
 
 @dataclass(frozen=True)
 class AgentPlan:
-    """Describes where one agent reads instructions and MCP configuration."""
+    """Describes where one agent reads instructions, skills, and MCP configuration."""
 
     name: str
     display_name: str
@@ -74,6 +75,8 @@ class AgentPlan:
     mcp_global: str | None = None
     mcp_project: str | None = None
     mcp_style: McpStyle = "servers"
+    skill_global: str | None = None
+    skill_project: str | None = ".agents/skills/engramkeep/SKILL.md"
 
     @property
     def targets(self) -> tuple[str, ...]:
@@ -87,6 +90,12 @@ class AgentPlan:
         values = (self.mcp_global, self.mcp_project)
         return tuple(value for value in values if value)
 
+    @property
+    def skill_targets(self) -> tuple[str, ...]:
+        """Return the documented SKILL.md targets, global first."""
+        values = (self.skill_global, self.skill_project)
+        return tuple(value for value in values if value)
+
 
 AGENT_PLANS: dict[str, AgentPlan] = {
     "opencode": AgentPlan(
@@ -98,6 +107,8 @@ AGENT_PLANS: dict[str, AgentPlan] = {
         mcp_global="~/.config/opencode/opencode.json",
         mcp_project="opencode.json",
         mcp_style="opencode",
+        skill_global="~/.config/opencode/skills/engramkeep/SKILL.md",
+        skill_project=".opencode/skills/engramkeep/SKILL.md",
     ),
     "claude-code": AgentPlan(
         name="claude-code",
@@ -107,6 +118,8 @@ AGENT_PLANS: dict[str, AgentPlan] = {
         notes="Claude Code reads CLAUDE.md; project scope keeps the rule with the repo.",
         mcp_global="~/.claude.json",
         mcp_project=".mcp.json",
+        skill_global="~/.claude/skills/engramkeep/SKILL.md",
+        skill_project=".claude/skills/engramkeep/SKILL.md",
     ),
     "codex": AgentPlan(
         name="codex",
@@ -114,6 +127,10 @@ AGENT_PLANS: dict[str, AgentPlan] = {
         global_target="~/.codex/AGENTS.md",
         project_target="AGENTS.md",
         notes="Codex reads AGENTS.md at the global or project level.",
+        mcp_global="~/.codex/mcp.json",
+        mcp_project=".codex/mcp.json",
+        skill_global="~/.codex/skills/engramkeep/SKILL.md",
+        skill_project=".codex/skills/engramkeep/SKILL.md",
     ),
     "cursor": AgentPlan(
         name="cursor",
@@ -124,6 +141,8 @@ AGENT_PLANS: dict[str, AgentPlan] = {
         frontmatter=CURSOR_FRONTMATTER,
         mcp_global="~/.cursor/mcp.json",
         mcp_project=".cursor/mcp.json",
+        skill_global="~/.cursor/skills/engramkeep/SKILL.md",
+        skill_project=".cursor/skills/engramkeep/SKILL.md",
     ),
     "windsurf": AgentPlan(
         name="windsurf",
@@ -131,6 +150,10 @@ AGENT_PLANS: dict[str, AgentPlan] = {
         global_target="~/.codeium/windsurf/memories/global_rules.md",
         project_target=".windsurf/rules/engramkeep.md",
         notes="Windsurf reads rules from the project or its global memories directory.",
+        mcp_global="~/.codeium/windsurf/mcp_config.json",
+        mcp_project=".windsurf/mcp.json",
+        skill_global="~/.codeium/windsurf/skills/engramkeep/SKILL.md",
+        skill_project=".windsurf/skills/engramkeep/SKILL.md",
     ),
     "gemini-cli": AgentPlan(
         name="gemini-cli",
@@ -138,6 +161,10 @@ AGENT_PLANS: dict[str, AgentPlan] = {
         global_target="~/.gemini/GEMINI.md",
         project_target="GEMINI.md",
         notes="Gemini CLI reads GEMINI.md; AGENTS.md is a portable fallback.",
+        mcp_global="~/.gemini/settings.json",
+        mcp_project=".gemini/settings.json",
+        skill_global="~/.gemini/skills/engramkeep/SKILL.md",
+        skill_project=".gemini/skills/engramkeep/SKILL.md",
     ),
     "antigravity": AgentPlan(
         name="antigravity",
@@ -145,6 +172,10 @@ AGENT_PLANS: dict[str, AgentPlan] = {
         global_target="~/.gemini/GEMINI.md",
         project_target="AGENTS.md",
         notes="Antigravity reads GEMINI.md and AGENTS.md; verify your installed version.",
+        mcp_global="~/.gemini/antigravity/mcp_config.json",
+        mcp_project=".gemini/mcp.json",
+        skill_global="~/.gemini/antigravity/skills/engramkeep/SKILL.md",
+        skill_project=".agents/skills/engramkeep/SKILL.md",
     ),
     "copilot": AgentPlan(
         name="copilot",
@@ -152,6 +183,8 @@ AGENT_PLANS: dict[str, AgentPlan] = {
         global_target=None,
         project_target=".github/copilot-instructions.md",
         notes="Copilot reads repository instructions from .github/.",
+        skill_global=None,
+        skill_project=".github/skills/engramkeep/SKILL.md",
     ),
     "cline": AgentPlan(
         name="cline",
@@ -159,6 +192,10 @@ AGENT_PLANS: dict[str, AgentPlan] = {
         global_target=None,
         project_target=".clinerules",
         notes="Cline reads .clinerules at the repository root.",
+        mcp_global=None,
+        mcp_project=".cline/mcp_settings.json",
+        skill_global=None,
+        skill_project=".cline/skills/engramkeep/SKILL.md",
     ),
     "roo": AgentPlan(
         name="roo",
@@ -166,6 +203,10 @@ AGENT_PLANS: dict[str, AgentPlan] = {
         global_target=None,
         project_target=".roorules",
         notes="Roo Code reads .roorules at the repository root.",
+        mcp_global=None,
+        mcp_project=".roo/mcp.json",
+        skill_global=None,
+        skill_project=".roo/skills/engramkeep/SKILL.md",
     ),
 }
 
@@ -285,6 +326,7 @@ def format_plan(plan: AgentPlan) -> str:
         "Global target: " + (plan.global_target or "-"),
         f"Project target: {plan.project_target}",
         "MCP config: " + (", ".join(plan.mcp_targets) if plan.mcp_targets else "manual setup"),
+        "Skill target: " + (", ".join(plan.skill_targets) if plan.skill_targets else "-"),
     ]
     if plan.notes:
         lines.append(f"Note: {plan.notes}")
@@ -419,17 +461,58 @@ def _remove_block(path: Path, *, session: _Session) -> tuple[str, str | None]:
     return "removed", backup
 
 
-def _mcp_payload(plan: AgentPlan) -> dict[str, Any]:
+def _load_bundled_skill() -> str:
+    """Read the bundled SKILL.md shipped inside the Engramkeep package."""
+    try:
+        resource = importlib.resources.files("engramkeep.data").joinpath("SKILL.md")
+        return resource.read_text(encoding="utf-8")
+    except (OSError, FileNotFoundError) as exc:  # pragma: no cover - packaging invariant
+        raise InstallerError(f"bundled SKILL.md is unavailable: {exc}") from exc
+
+
+def _resolve_mcp_command(*, allow_write: bool = False) -> tuple[str, list[str]]:
+    """Prefer portable ``engramkeep`` on PATH over ephemeral ``sys.executable``."""
+    extra = ["--allow-write"] if allow_write else []
+    if shutil.which("engramkeep"):
+        return "engramkeep", ["mcp", *extra]
+    return sys.executable, ["-m", "engramkeep", "mcp", *extra]
+
+
+def _mcp_payload(plan: AgentPlan, *, allow_write: bool = False) -> dict[str, Any]:
+    command, args = _resolve_mcp_command(allow_write=allow_write)
     if plan.mcp_style == "opencode":
         return {
             "type": "local",
-            "command": [sys.executable, "-m", "engramkeep", "mcp"],
+            "command": [command, *args],
             "enabled": True,
         }
     return {
-        "command": sys.executable,
-        "args": ["-m", "engramkeep", "mcp"],
+        "command": command,
+        "args": args,
     }
+
+
+def _apply_skill(path: Path, *, session: _Session, remove: bool) -> tuple[str, str | None]:
+    _ensure_not_symlink(path)
+    existed = path.exists()
+    if remove:
+        if not existed:
+            return "missing", None
+        if session.dry_run:
+            return _dry_run_action("removed"), None
+        backup = session.backup(path)
+        path.unlink()
+        return "removed", backup
+
+    content = _load_bundled_skill()
+    if existed and _read_text_utf8(path) == content:
+        return "unchanged", None
+    action = "updated" if existed else "created"
+    if session.dry_run:
+        return _dry_run_action(action), None
+    backup = session.backup(path) if existed else None
+    atomic_write_text(path, content, mode=None)
+    return action, backup
 
 
 def _load_json_object(path: Path) -> dict[str, Any]:
@@ -460,6 +543,7 @@ def _apply_mcp(
     *,
     session: _Session,
     remove: bool,
+    allow_write: bool = False,
 ) -> tuple[str, str | None]:
     _ensure_not_symlink(path)
     key = "mcp" if plan.mcp_style == "opencode" else "mcpServers"
@@ -486,7 +570,7 @@ def _apply_mcp(
         if not section:
             data.pop(key, None)
     else:
-        section["engramkeep"] = _mcp_payload(plan)
+        section["engramkeep"] = _mcp_payload(plan, allow_write=allow_write)
 
     updated = json.dumps(data, ensure_ascii=False, indent=2) + "\n"
     if existed and updated == _read_text_utf8(path):
@@ -509,10 +593,12 @@ def install_agents(
     backup_root: Path,
     scope: Scope = "auto",
     mcp: bool = False,
+    mcp_allow_write: bool = False,
+    skill: bool = False,
     dry_run: bool = True,
     remove: bool = False,
 ) -> InstallResult:
-    """Install or remove Engramkeep rules for one agent or ``all``.
+    """Install or remove Engramkeep rules, optional MCP config, and SKILL.md.
 
     Dry-run is the default. Existing files are backed up before any write.
     """
@@ -551,6 +637,31 @@ def install_agents(
             action, backup = _apply_block(target, _block_for(plan), session=session)
         session.record(Operation(agent=plan.name, target=str(target), action=action, backup=backup))
 
+        if skill:
+            skill_raw = plan.skill_global if selected_scope == "global" else plan.skill_project
+            if skill_raw is None:
+                session.record(
+                    Operation(
+                        agent=plan.name,
+                        target=target_raw,
+                        action="skipped",
+                        reason="no documented SKILL.md target for this scope",
+                    )
+                )
+            else:
+                skill_path = _resolve_path(skill_raw, user_home=user_home, project_dir=project_dir)
+                skill_action, skill_backup = _apply_skill(
+                    skill_path, session=session, remove=remove
+                )
+                session.record(
+                    Operation(
+                        agent=plan.name,
+                        target=str(skill_path),
+                        action=skill_action,
+                        backup=skill_backup,
+                    )
+                )
+
         mcp_raw = plan.mcp_global if selected_scope == "global" else plan.mcp_project
         if not mcp:
             if remove and mcp_raw is not None:
@@ -579,7 +690,13 @@ def install_agents(
             )
             continue
         mcp_path = _resolve_path(mcp_raw, user_home=user_home, project_dir=project_dir)
-        mcp_action, mcp_backup = _apply_mcp(mcp_path, plan, session=session, remove=remove)
+        mcp_action, mcp_backup = _apply_mcp(
+            mcp_path,
+            plan,
+            session=session,
+            remove=remove,
+            allow_write=mcp_allow_write,
+        )
         session.record(
             Operation(
                 agent=plan.name,

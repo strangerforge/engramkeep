@@ -4,10 +4,14 @@ from __future__ import annotations
 
 import contextlib
 import json
+import os
+import re
+import shutil
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from .audit import AuditVerification, last_audit_hash, seal_audit_entry, verify_audit_log
 from .config import SCHEMA_VERSION
 from .errors import CardParseError, PathSafetyError, StoreError, ValidationError
 from .models import (
@@ -17,7 +21,10 @@ from .models import (
     new_card,
     normalize_tags,
     parse_card,
+    remove_decision,
+    remove_tags,
     render_card,
+    supersede_decision,
     utc_now_iso,
 )
 from .paths import (
@@ -34,6 +41,7 @@ from .paths import (
     strip_control_chars,
 )
 from .redact import contains_secret, redact_text
+from .search import SearchHit, search_cards
 from .troubleshoot import (
     MAX_ERROR_CHARS,
     MAX_FIX_CHARS,
@@ -54,6 +62,9 @@ META_NAME = "meta.json"
 INDEX_NAME = "INDEX.md"
 RECENT_NAME = "RECENT_ACTIVITY.md"
 AUDIT_NAME = "audit.log"
+_TRASH_NAME_RE = re.compile(
+    r"^(?P<id>[a-z0-9]+(?:-[a-z0-9]+)*)-(?P<stamp>\d{8}T\d{6}Z)(?:-\d+)?\.md$"
+)
 
 
 @dataclass
@@ -100,6 +111,59 @@ class ScanResult:
     errors: list[str] = field(default_factory=list)
 
 
+@dataclass(frozen=True)
+class TrashEntry:
+    """One trashed card stored under ``trash/``."""
+
+    filename: str
+    project_id: str
+    trashed_at: str
+    size_bytes: int
+
+    def to_dict(self) -> dict[str, object]:
+        """Return a JSON-serializable representation."""
+        return {
+            "filename": self.filename,
+            "project_id": self.project_id,
+            "trashed_at": self.trashed_at,
+            "size_bytes": self.size_bytes,
+        }
+
+
+@dataclass
+class SupersedeResult:
+    """Result of superseding a decision on a project card."""
+
+    card: Card
+    old_decision: str
+    new_decision: str
+    reason: str | None = None
+
+    def to_dict(self) -> dict[str, object]:
+        """Return a JSON-serializable representation."""
+        return {
+            "card": self.card.to_dict(),
+            "old_decision": self.old_decision,
+            "new_decision": self.new_decision,
+            "reason": self.reason,
+        }
+
+
+@dataclass
+class UntagResult:
+    """Result of removing tags from a project card."""
+
+    card: Card
+    removed_tags: list[str] = field(default_factory=list)
+
+    def to_dict(self) -> dict[str, object]:
+        """Return a JSON-serializable representation."""
+        return {
+            "card": self.card.to_dict(),
+            "removed_tags": list(self.removed_tags),
+        }
+
+
 @dataclass
 class DoctorReport:
     """Health report for a store."""
@@ -117,6 +181,8 @@ class DoctorReport:
     permissions_ok: bool
     warnings: list[str] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
+    audit_chain_status: str = "empty"
+    audit_chain_ok: bool = True
 
     def to_dict(self) -> dict[str, object]:
         """Return a JSON-serializable representation."""
@@ -132,8 +198,27 @@ class DoctorReport:
             "recent_present": self.recent_present,
             "audit_present": self.audit_present,
             "permissions_ok": self.permissions_ok,
+            "audit_chain_status": self.audit_chain_status,
+            "audit_chain_ok": self.audit_chain_ok,
             "warnings": list(self.warnings),
             "errors": list(self.errors),
+        }
+
+
+@dataclass
+class DoctorFixResult:
+    """Result of running ``engramkeep doctor --fix``."""
+
+    actions: list[str]
+    backup_dir: Path | None
+    report: DoctorReport
+
+    def to_dict(self) -> dict[str, object]:
+        """Return a JSON-serializable representation."""
+        return {
+            "actions": list(self.actions),
+            "backup_dir": str(self.backup_dir) if self.backup_dir else None,
+            "report": self.report.to_dict(),
         }
 
 
@@ -184,7 +269,7 @@ class Store:
         if version < SCHEMA_VERSION:
             raise StoreError(
                 f"store schema {version} is older than supported schema {SCHEMA_VERSION}; "
-                "migration is not implemented in this release"
+                "run 'engramkeep migrate --apply' to upgrade"
             )
         return data
 
@@ -388,6 +473,213 @@ class Store:
             self._audit("forget", project_id, {"trashed_as": trash_path.name})
             return True
 
+    def list_trash(self) -> list[TrashEntry]:
+        """List recoverable cards currently in ``trash/``, newest first."""
+        self.require_initialized()
+        if is_link_or_junction(self.trash_dir):
+            raise StoreError("refusing to read symlinked trash directory")
+        if not self.trash_dir.is_dir():
+            return []
+
+        entries: list[TrashEntry] = []
+        for path in sorted(self.trash_dir.glob("*.md")):
+            if is_link_or_junction(path) or not path.is_file():
+                continue
+            try:
+                safe_path = safe_join(self.trash_dir, path.name)
+            except PathSafetyError:
+                continue
+            match = _TRASH_NAME_RE.match(safe_path.name)
+            if match:
+                project_id = match.group("id")
+                raw_stamp = match.group("stamp")
+                trashed_at = (
+                    f"{raw_stamp[0:4]}-{raw_stamp[4:6]}-{raw_stamp[6:8]}T"
+                    f"{raw_stamp[9:11]}:{raw_stamp[11:13]}:{raw_stamp[13:15]}Z"
+                )
+            else:
+                project_id = safe_path.stem
+                trashed_at = ""
+            try:
+                size = safe_path.stat().st_size
+            except OSError:
+                size = 0
+            entries.append(
+                TrashEntry(
+                    filename=safe_path.name,
+                    project_id=project_id,
+                    trashed_at=trashed_at,
+                    size_bytes=size,
+                )
+            )
+        entries.sort(key=lambda item: (item.trashed_at, item.filename), reverse=True)
+        return entries
+
+    def restore(
+        self,
+        project: str,
+        *,
+        filename: str | None = None,
+        force: bool = False,
+    ) -> Card:
+        """Restore a trashed card back to ``projects/``."""
+        self.require_initialized()
+        project_id = normalize_project_id(project)
+        with self._write_lock():
+            if is_link_or_junction(self.trash_dir):
+                raise StoreError("refusing to use symlinked trash directory")
+            if not self.trash_dir.is_dir():
+                raise StoreError(f"no trashed card found for project: {project_id}")
+
+            if filename is not None:
+                trash_path = safe_join(self.trash_dir, filename)
+                if not trash_path.exists() or is_link_or_junction(trash_path):
+                    raise StoreError(f"trashed file not found: {filename}")
+            else:
+                candidates = [item for item in self.list_trash() if item.project_id == project_id]
+                if not candidates:
+                    raise StoreError(f"no trashed card found for project: {project_id}")
+                trash_path = safe_join(self.trash_dir, candidates[0].filename)
+
+            dest_path, _ = self._project_path(project_id)
+            if dest_path.exists() and not force:
+                raise StoreError(
+                    f"project {project_id!r} already exists; pass --force to overwrite it"
+                )
+            try:
+                text = trash_path.read_text(encoding="utf-8")
+                card = parse_card(text, fallback_id=project_id)
+            except (OSError, UnicodeDecodeError, CardParseError) as exc:
+                raise StoreError(f"cannot restore {trash_path.name}: {exc}") from exc
+
+            try:
+                replace_file(trash_path, dest_path)
+            except OSError as exc:
+                raise StoreError(f"cannot restore {trash_path.name}: {exc}") from exc
+
+            self._write_index(self.scan_cards().cards)
+            self._append_recent(
+                f"restored **{card.title}** (`{card.id}`)",
+                card.id,
+                card.tags,
+            )
+            self._audit("restore", card.id, {"from_trash": trash_path.name})
+            return card
+
+    def purge_trash(self, *, project: str | None = None) -> int:
+        """Permanently delete files in ``trash/`` (optionally filtered by project)."""
+        self.require_initialized()
+        target_id = normalize_project_id(project) if project else None
+        with self._write_lock():
+            if is_link_or_junction(self.trash_dir):
+                raise StoreError("refusing to use symlinked trash directory")
+            if not self.trash_dir.is_dir():
+                return 0
+            removed = 0
+            for item in self.list_trash():
+                if target_id is not None and item.project_id != target_id:
+                    continue
+                trash_path = safe_join(self.trash_dir, item.filename)
+                if is_link_or_junction(trash_path) or not trash_path.is_file():
+                    continue
+                try:
+                    trash_path.unlink()
+                except OSError as exc:
+                    raise StoreError(f"cannot purge {item.filename}: {exc}") from exc
+                removed += 1
+            if removed:
+                self._audit("purge_trash", target_id, {"removed": removed})
+            return removed
+
+    def supersede(
+        self,
+        project: str,
+        old_decision: str,
+        new_decision: str,
+        *,
+        reason: str | None = None,
+    ) -> SupersedeResult:
+        """Supersede an existing decision with a new one while preserving history."""
+        self.require_initialized()
+        project_id = normalize_project_id(project)
+        raw_new = str(new_decision)
+        if len(raw_new) > 262_144:
+            raise ValidationError("decision exceeds maximum input size")
+        clean_new = redact_text(" ".join(strip_control_chars(raw_new).split()))
+        clean_reason = (
+            redact_text(" ".join(strip_control_chars(str(reason)).split()))
+            if reason is not None and str(reason).strip()
+            else None
+        )
+
+        with self._write_lock():
+            card = self.get_card(project_id)
+            if card is None:
+                raise StoreError(f"project not found: {project}")
+            matched_old, recorded_new = supersede_decision(
+                card,
+                old_decision,
+                clean_new,
+                reason=clean_reason,
+            )
+            self.save_card(card)
+            self._write_index(self.scan_cards().cards)
+            self._append_recent(
+                f"superseded a decision in **{card.title}** (`{card.id}`)",
+                card.id,
+                card.tags,
+            )
+            self._audit("supersede", card.id, {"has_reason": bool(clean_reason)})
+            return SupersedeResult(
+                card=card,
+                old_decision=matched_old,
+                new_decision=recorded_new,
+                reason=clean_reason,
+            )
+
+    def untag(self, project: str, tags: Iterable[str]) -> UntagResult:
+        """Remove one or more tags from an existing project card."""
+        self.require_initialized()
+        project_id = normalize_project_id(project)
+        normalized = normalize_tags(tags)
+        if not normalized:
+            raise ValidationError("at least one tag is required")
+
+        with self._write_lock():
+            card = self.get_card(project_id)
+            if card is None:
+                raise StoreError(f"project not found: {project}")
+            removed = remove_tags(card, normalized)
+            if removed:
+                self.save_card(card)
+                self._write_index(self.scan_cards().cards)
+                self._append_recent(
+                    f"removed tags from **{card.title}** (`{card.id}`)",
+                    card.id,
+                    card.tags,
+                )
+            self._audit("untag", card.id, {"removed": removed, "tags": list(card.tags)})
+            return UntagResult(card=card, removed_tags=removed)
+
+    def remove_decision(self, project: str, decision: str) -> tuple[Card, str]:
+        """Remove a single decision bullet from a project card without deleting the card."""
+        self.require_initialized()
+        project_id = normalize_project_id(project)
+        with self._write_lock():
+            card = self.get_card(project_id)
+            if card is None:
+                raise StoreError(f"project not found: {project}")
+            removed_text = remove_decision(card, decision)
+            self.save_card(card)
+            self._write_index(self.scan_cards().cards)
+            self._append_recent(
+                f"removed a decision from **{card.title}** (`{card.id}`)",
+                card.id,
+                card.tags,
+            )
+            self._audit("remove_decision", card.id, {"removed": True})
+            return card, removed_text
+
     def reindex(self) -> ScanResult:
         """Regenerate INDEX.md from the valid cards."""
         self.require_initialized()
@@ -429,15 +721,19 @@ class Store:
     def _write_troubleshooting(self, entries: list[TroubleEntry]) -> None:
         atomic_write_text(self.troubleshooting_path, render_registry(entries), private_parent=True)
 
-    def record_fix(
+    def record_fix_result(
         self,
         error: str,
         fix: str,
         *,
         project: str | None = None,
         workspace: str | None = None,
-    ) -> TroubleEntry:
-        """Record one resolved problem and its verified fix."""
+    ) -> tuple[TroubleEntry, bool]:
+        """Record a resolved problem if not already present.
+
+        Returns ``(entry, added)`` where ``added`` is False when an equivalent
+        ``(project, error, fix)`` entry already exists in ``TROUBLESHOOTING.md``.
+        """
         self.require_initialized()
         try:
             clean_error = redact_text(
@@ -466,8 +762,22 @@ class Store:
             workspace=clean_workspace,
             date=utc_now_iso()[:10],
         )
+        dedup_key = entry.dedup_key()
         with self._write_lock():
             entries = self._read_troubleshooting()
+            for existing in entries:
+                if existing.dedup_key() == dedup_key:
+                    self._audit(
+                        "record_fix",
+                        existing.project,
+                        {
+                            "error": existing.error[:120],
+                            "workspace": existing.workspace or "General",
+                            "duplicate": True,
+                        },
+                    )
+                    return existing, False
+
             entries.append(entry)
             self._write_troubleshooting(entries)
             self._append_recent(
@@ -478,9 +788,25 @@ class Store:
             self._audit(
                 "record_fix",
                 entry.project,
-                {"error": entry.error[:120], "workspace": entry.workspace or "General"},
+                {
+                    "error": entry.error[:120],
+                    "workspace": entry.workspace or "General",
+                    "duplicate": False,
+                },
             )
-            return entry
+            return entry, True
+
+    def record_fix(
+        self,
+        error: str,
+        fix: str,
+        *,
+        project: str | None = None,
+        workspace: str | None = None,
+    ) -> TroubleEntry:
+        """Record one resolved problem and its verified fix (deduplicated)."""
+        entry, _ = self.record_fix_result(error, fix, project=project, workspace=workspace)
+        return entry
 
     def search_fixes(self, query: str | None, *, limit: int = 10) -> list[FixHit]:
         """Search the troubleshooting registry, or list the newest entries."""
@@ -501,6 +827,10 @@ class Store:
             "fixes": [entry.to_dict() for entry in self._read_troubleshooting()],
         }
         return export_doc
+
+    def verify_audit(self) -> AuditVerification:
+        """Verify the SHA-256 hash chain of ``audit.log``."""
+        return verify_audit_log(self.audit_path)
 
     def doctor(self) -> DoctorReport:
         """Inspect the store without modifying it."""
@@ -545,6 +875,14 @@ class Store:
         if not report.permissions_ok:
             report.warnings.append("store directory is accessible by group or others")
 
+        audit_check = verify_audit_log(self.audit_path)
+        report.audit_chain_status = audit_check.status
+        report.audit_chain_ok = audit_check.ok
+        if not audit_check.ok:
+            report.errors.append(f"audit.log integrity check failed: {audit_check.message}")
+        elif audit_check.status == "legacy":
+            report.warnings.append(audit_check.message)
+
         scan = self.scan_cards()
         report.cards = len(scan.cards)
         report.malformed = list(scan.errors)
@@ -567,6 +905,97 @@ class Store:
 
         report.ok = not report.errors
         return report
+
+    def doctor_fix(self) -> DoctorFixResult:
+        """Safely repair recoverable store issues with backups.
+
+        Repairs missing directories/files, stale ``INDEX.md``, broad POSIX
+        permissions, and leftover temporary ``.*.tmp`` files. Never deletes
+        malformed cards or modifies unredacted content automatically.
+        """
+        self.require_initialized()
+        actions: list[str] = []
+        backup_dir: Path | None = None
+
+        def _ensure_backup_dir() -> Path:
+            nonlocal backup_dir
+            if backup_dir is not None:
+                return backup_dir
+            stamp = utc_now_iso().replace("-", "").replace(":", "")
+            candidate = self.home / "backups" / "doctor" / f"{stamp}-{os.getpid()}"
+            counter = 1
+            while candidate.exists():
+                candidate = self.home / "backups" / "doctor" / f"{stamp}-{os.getpid()}-{counter}"
+                counter += 1
+            backup_dir = ensure_private_dir(candidate)
+            return backup_dir
+
+        def _backup_if_exists(path: Path) -> None:
+            if path.is_file() and not is_link_or_junction(path):
+                dst = _ensure_backup_dir() / path.name
+                shutil.copy2(path, dst)
+
+        with self._write_lock():
+            if not is_private_path(self.home):
+                ensure_private_dir(self.home)
+                actions.append("tightened permissions on store directory")
+
+            for directory, label in (
+                (self.projects_dir, "projects/"),
+                (self.trash_dir, "trash/"),
+            ):
+                if is_link_or_junction(directory):
+                    raise StoreError(f"refusing to repair symlinked directory: {label}")
+                if not directory.exists():
+                    ensure_private_dir(directory)
+                    actions.append(f"created missing directory {label}")
+                elif not is_private_path(directory):
+                    ensure_private_dir(directory)
+                    actions.append(f"tightened permissions on {label}")
+
+            if not self.recent_path.exists():
+                atomic_write_text(self.recent_path, "# Recent Activity\n\n", private_parent=True)
+                actions.append("created missing RECENT_ACTIVITY.md")
+            if not self.audit_path.exists():
+                atomic_write_text(self.audit_path, "", private_parent=True)
+                actions.append("created missing audit.log")
+            if not self.troubleshooting_path.exists():
+                atomic_write_text(
+                    self.troubleshooting_path, render_registry([]), private_parent=True
+                )
+                actions.append("created missing TROUBLESHOOTING.md")
+
+            scan = self.scan_cards()
+            expected_index = self._render_index(scan.cards)
+            if not self.index_path.is_file():
+                self._write_index(scan.cards)
+                actions.append("regenerated missing INDEX.md")
+            else:
+                try:
+                    current_index = self.index_path.read_text(encoding="utf-8")
+                except (OSError, UnicodeDecodeError):
+                    current_index = ""
+                if current_index != expected_index:
+                    _backup_if_exists(self.index_path)
+                    self._write_index(scan.cards)
+                    actions.append("rebuilt out-of-sync INDEX.md")
+
+            # Clean stale atomic-write temporary files in store root and projects/.
+            for directory in (self.home, self.projects_dir):
+                if not directory.is_dir() or is_link_or_junction(directory):
+                    continue
+                for tmp_file in sorted(directory.glob(".*.tmp")):
+                    if is_link_or_junction(tmp_file) or not tmp_file.is_file():
+                        continue
+                    with contextlib.suppress(OSError):
+                        tmp_file.unlink()
+                        actions.append(f"removed stale temporary file {tmp_file.name}")
+
+            if actions:
+                self._audit("doctor_fix", None, {"actions": len(actions)})
+
+        report = self.doctor()
+        return DoctorFixResult(actions=actions, backup_dir=backup_dir, report=report)
 
     def _render_index(self, cards: Iterable[Card]) -> str:
         ordered = sorted(cards, key=lambda card: (card.updated, card.title.lower()), reverse=True)
@@ -607,4 +1036,110 @@ class Store:
         if project:
             entry["project"] = project
         entry.update(details)
-        append_text(self.audit_path, json.dumps(entry, ensure_ascii=False, sort_keys=True) + "\n")
+        prev = last_audit_hash(self.audit_path)
+        sealed = seal_audit_entry(entry, prev)
+        append_text(self.audit_path, json.dumps(sealed, ensure_ascii=False, sort_keys=True) + "\n")
+
+
+class LayeredStore:
+    """Read-overlay combining an optional project ``.engramkeep/`` store with global memory.
+
+    When a project store is present, its cards take precedence over global cards
+    with the same project id, while unique cards and fixes from both layers are
+    returned together with explicit ``source`` attribution (``"project"`` or
+    ``"global"``).
+    """
+
+    def __init__(self, global_store: Store, project_store: Store | None = None) -> None:
+        self.global_store = global_store
+        if project_store is not None and project_store.home == global_store.home:
+            self.project_store: Store | None = None
+        else:
+            self.project_store = project_store
+
+    @property
+    def is_layered(self) -> bool:
+        """Return True when both a project store and a global store are active."""
+        return self.project_store is not None and self.project_store.is_initialized()
+
+    def _active_layers(self) -> list[tuple[str, Store]]:
+        layers: list[tuple[str, Store]] = []
+        if self.project_store is not None and self.project_store.is_initialized():
+            layers.append(("project", self.project_store))
+        if self.global_store.is_initialized():
+            layers.append(("global", self.global_store))
+        if not layers:
+            raise StoreError(
+                f"no Engramkeep store at {self.global_store.home}; run 'engramkeep init' first"
+            )
+        return layers
+
+    def get_card(self, project: str) -> tuple[Card, str] | None:
+        """Return ``(card, source)`` from project layer first, then global."""
+        for source, layer in self._active_layers():
+            card = layer.get_card(project)
+            if card is not None:
+                return card, source
+        return None
+
+    def scan_cards(self) -> tuple[list[Card], dict[str, str], list[str]]:
+        """Scan active layers, merging by card id with project precedence."""
+        merged: dict[str, Card] = {}
+        sources: dict[str, str] = {}
+        errors: list[str] = []
+        for source, layer in self._active_layers():
+            scan = layer.scan_cards()
+            errors.extend(f"[{source}] {err}" for err in scan.errors)
+            for card in scan.cards:
+                if card.id not in merged:
+                    merged[card.id] = card
+                    sources[card.id] = source
+        return list(merged.values()), sources, errors
+
+    def search(
+        self,
+        query: str,
+        *,
+        tag: str | None = None,
+        limit: int = 10,
+    ) -> tuple[list[SearchHit], list[str]]:
+        """Search cards across all active layers and annotate hits with ``source``."""
+        cards, sources, errors = self.scan_cards()
+        hits = search_cards(cards, query, tag=tag, limit=limit)
+        if not self.is_layered:
+            return hits, errors
+        annotated = [
+            SearchHit(
+                id=hit.id,
+                title=hit.title,
+                score=hit.score,
+                snippet=hit.snippet,
+                tags=hit.tags,
+                updated=hit.updated,
+                source=sources.get(hit.id, "global"),
+            )
+            for hit in hits
+        ]
+        return annotated, errors
+
+    def search_fixes(self, query: str | None, *, limit: int = 10) -> list[FixHit]:
+        """Search troubleshooting registries across active layers, deduplicating entries."""
+        entries: list[TroubleEntry] = []
+        source_by_key: dict[tuple[str, str, str], str] = {}
+        for source, layer in self._active_layers():
+            for entry in layer._read_troubleshooting():
+                key = entry.dedup_key()
+                if key not in source_by_key:
+                    source_by_key[key] = source
+                    entries.append(entry)
+        hits = search_entries(entries, query, limit=limit)
+        if not self.is_layered:
+            return hits
+        return [
+            FixHit(
+                entry=hit.entry,
+                score=hit.score,
+                source=source_by_key.get(hit.entry.dedup_key(), "global"),
+            )
+            for hit in hits
+        ]
