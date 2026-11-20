@@ -147,8 +147,14 @@ def _run_mcp(
 @pytest.mark.skipif(not _git_available(), reason="git is not installed")
 def test_sync_tracks_allowlisted_card_deletions_and_cli_sync(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
+    monkeypatch.setenv("GIT_AUTHOR_NAME", "Engramkeep Test")
+    monkeypatch.setenv("GIT_AUTHOR_EMAIL", "test@example.invalid")
+    monkeypatch.setenv("GIT_COMMITTER_NAME", "Engramkeep Test")
+    monkeypatch.setenv("GIT_COMMITTER_EMAIL", "test@example.invalid")
+
     store = Store(tmp_path / "brain")
     store.init()
     store.remember("alpha", "Use Postgres")
