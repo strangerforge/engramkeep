@@ -1,6 +1,8 @@
 # Compatibility
 
-Engramkeep 1.2.0 is portable by file format. The installer writes managed blocks,
+> **English** | [Türkçe](COMPATIBILITY.tr.md)
+
+Engramkeep 1.2.1 is portable by file format. The installer writes managed blocks,
 MCP registrations, and skills into supported agent configs while backing up every
 touched file with a timestamped manifest; manual template copying also works.
 
@@ -8,7 +10,7 @@ touched file with a timestamped manifest; manual template copying also works.
 
 | Item | Support |
 | --- | --- |
-| Python | 3.10, 3.11, 3.12, 3.13 |
+| Python | 3.10, 3.11, 3.12, 3.13, 3.14 |
 | Windows | Supported |
 | macOS | Supported |
 | Linux | Supported |
@@ -17,7 +19,7 @@ touched file with a timestamped manifest; manual template copying also works.
 | File encoding | UTF-8 |
 | Generated line endings | LF |
 
-CI runs tests on Windows, Linux, and macOS across Python 3.10–3.13.
+CI runs tests on Windows, Linux, and macOS across Python 3.10–3.14.
 
 ## Agents
 
@@ -139,7 +141,9 @@ exposes no CORS headers. There is no forget button.
   advisory lock (`.engramkeep.lock`), with bounded timeout.
 - Search is lexical (BM25 + phrase + EN/TR concepts + Turkish prefix matching);
   it is not semantic or vector search.
-- Optional at-rest encryption encrypts files as a whole (there is no encrypted
+- Optional at-rest encryption encrypts `projects/*.md` and
+  `TROUBLESHOOTING.md` as whole files (`INDEX.md`, `RECENT_ACTIVITY.md`,
+  `audit.log`, and `meta.json` remain plaintext, and there is no encrypted
   search index); for transparent always-on encryption, prefer full-disk
   encryption.
 - Malformed cards are skipped by search/list and reported by `doctor`.

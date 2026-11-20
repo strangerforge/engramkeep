@@ -35,7 +35,7 @@ This roadmap tracks Engramkeep's release milestones and security gates.
 - Expanded installer (9 MCP agents, `--mcp-allow-write`, `--skill`) and modular dashboard.
 - Schema migrations (`engramkeep migrate`), SHA-256 hash-chained `audit.log`, allowlist `engramkeep sync`, multi-agent transcript adapters (`import --interactive`), and shell completion.
 
-## 1.2.0 - Precision, Context Packing, and Release Integrity (current)
+## 1.2.0 - Precision, Context Packing, and Release Integrity (released)
 
 - [x] **Reliability & security hardening:**
   - Tracked allowlist deletion handling in `engramkeep sync` (fixes ghost cards after `forget`).
@@ -52,7 +52,14 @@ This roadmap tracks Engramkeep's release milestones and security gates.
 - [x] **Optional encryption & release supply chain:**
   - Opt-in at-rest AEAD encryption (`engramkeep encrypt` / `decrypt` via optional `engramkeep[crypto]` extra).
   - Release `SHA256SUMS.txt` checksums and SLSA build provenance attestation (`actions/attest-build-provenance`).
-  - CLI exit codes reference (`docs/EXIT_CODES.md`) and full EN/TR doc sync.
+  - CLI exit codes reference (`docs/EXIT_CODES.md`) and bilingual README EN/TR sync.
+
+## 1.2.1 - Maintenance, Security Parity, and Bilingual Docs (current)
+
+- [x] Updated `SECURITY.md` supported versions (`1.2.x`), cleaned `docs/GOOD_FIRST_ISSUES.md`, and enforced `CHANGELOG.md` + `SECURITY.md` version parity in `scripts/check_repo_hygiene.py`.
+- [x] Added Turkish translations for short docs (`docs/COMPATIBILITY.tr.md`, `docs/PRIVACY.tr.md`).
+- [x] Stored Scrypt `kdf_params` in encrypted envelopes with bounded validation and backwards-compatible decryption, and clarified partial encryption + plaintext backup boundaries in CLI and docs.
+- [x] Enforced non-negative `--limit` validation for `search` and `fixes`, expanded the no-match benchmark control (`3/4`), added no-trailing-newline installer coverage, sped up dashboard test teardown, and added Python 3.14 support.
 
 ## Future considerations
 

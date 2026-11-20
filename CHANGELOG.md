@@ -7,6 +7,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.1] - 2026-11-20
+
+### Added
+
+- **Bilingual short documentation (`docs/COMPATIBILITY.tr.md`, `docs/PRIVACY.tr.md`):**
+  - Added Turkish translations for `docs/COMPATIBILITY.md` and `docs/PRIVACY.md`
+    with EN/TR language links at the top of each document.
+- **Self-describing Scrypt KDF parameters (`crypto.py`):**
+  - Stored `kdf_params` (`n`, `r`, `p`) inside `engramkeep-enc-v1` encrypted
+    envelopes with strict bounds validation on decryption (preventing KDF DoS
+    from tampered envelopes) while remaining backwards-compatible with v1.2.0
+    envelopes that omit `kdf_params`.
+- **Release doc parity checks (`scripts/check_repo_hygiene.py`):**
+  - Enforced `CHANGELOG.md` release heading parity and `SECURITY.md` supported
+    version series parity alongside `pyproject.toml` ↔ `__version__`,
+    `SKILL.md`, and asset budget checks.
+- **Python 3.14 support (`pyproject.toml`, `.github/workflows/ci.yml`):**
+  - Added Python `3.14` to package classifiers and the CI test matrix.
+
+### Changed
+
+- **Clarified partial at-rest encryption scope (`cli.py`, `docs/PRIVACY.md`, `docs/THREAT_MODEL.md`, `SECURITY.md`):**
+  - `engramkeep encrypt` CLI output and docs now explicitly note that
+    encryption covers `projects/*.md` and `TROUBLESHOOTING.md` only, while
+    `INDEX.md`, `RECENT_ACTIVITY.md`, `audit.log`, `meta.json`, and
+    `backups/crypto/` remain plaintext.
+- **Explicit non-negative `--limit` validation (`cli.py`):**
+  - `engramkeep search --limit` and `engramkeep fixes --limit` now reject
+    negative values with a clear argument error (exit code `2`) and document
+    `(integer >= 0, default: 10)` in help text.
+- **Benchmark & contributor docs (`examples/fix-registry/fixes.json`, `docs/BENCHMARK.md`, `docs/GOOD_FIRST_ISSUES.md`, `docs/ROADMAP.md`):**
+  - Added a fourth clean no-match control query to the fix-recall benchmark
+    (`3/4` clean while keeping the honest ambiguous match).
+  - Updated `SECURITY.md` supported versions (`1.2.x`), replaced completed
+    entries in `docs/GOOD_FIRST_ISSUES.md` with genuinely open tasks, and
+    aligned `docs/ROADMAP.md` EN/TR wording.
+- **Faster dashboard test teardown (`tests/test_v1_2_features.py`):**
+  - Passed `poll_interval=0.05` to `DashboardServer.serve_forever` in v1.2
+    integration tests and added regression coverage for `--limit` edge cases,
+    no-trailing-newline installer files, hygiene version parity, and `kdf_params`.
+
 ## [1.2.0] - 2026-11-20
 
 ### Added

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "engramkeep"
-version = "1.2.0"
+version = "1.2.1"
 description = "Local-first, Markdown-native persistent memory for AI coding agents."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -22,6 +22,7 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Topic :: Software Development :: Documentation",
     "Topic :: Utilities",
 ]

@@ -260,3 +260,40 @@ def test_uninstall_without_mcp_notes_remaining_mcp_entry(tmp_path: Path) -> None
     actions = {op.action: op.reason for op in result.operations}
     assert actions.get("kept") == "MCP entry remains; pass --uninstall --mcp to remove"
     assert "engramkeep" in json.loads(mcp_path.read_text(encoding="utf-8"))["mcpServers"]
+
+
+def test_apply_uninstall_and_restore_without_trailing_newline(tmp_path: Path) -> None:
+    from engramkeep.installer import BEGIN_MARKER, END_MARKER, restore_installer_backup
+
+    project_dir = tmp_path / "project"
+    project_dir.mkdir(parents=True, exist_ok=True)
+    target = project_dir / "CLAUDE.md"
+    original_bytes = b"# Existing instructions without trailing newline"
+    target.write_bytes(original_bytes)
+
+    applied = run_install("claude-code", tmp_path, dry_run=False)
+    assert applied.backup_dir is not None
+    text_after_apply = target.read_text(encoding="utf-8")
+    assert text_after_apply.startswith("# Existing instructions without trailing newline\n\n")
+    assert BEGIN_MARKER in text_after_apply
+    assert END_MARKER in text_after_apply
+
+    # Second apply is idempotent
+    second = run_install("claude-code", tmp_path, dry_run=False)
+    assert second.operations[0].action == "unchanged"
+
+    # Uninstall cleanly strips only the managed block
+    removed = run_install("claude-code", tmp_path, dry_run=False, remove=True)
+    assert removed.operations[0].action == "removed"
+    text_after_uninstall = target.read_text(encoding="utf-8")
+    assert BEGIN_MARKER not in text_after_uninstall
+    assert text_after_uninstall.strip() == original_bytes.decode("utf-8")
+
+    # Backup restore recovers exact byte-for-byte original (no trailing newline)
+    restore_result = restore_installer_backup(
+        applied.backup_dir.parent,
+        applied.backup_dir.name,
+        dry_run=False,
+    )
+    assert restore_result.operations[0].action == "restored"
+    assert target.read_bytes() == original_bytes

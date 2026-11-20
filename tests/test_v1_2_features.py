@@ -78,7 +78,11 @@ def _running_dashboard(
         allow_write=allow_write,
         project_home=project_home,
     )
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread = threading.Thread(
+        target=server.serve_forever,
+        kwargs={"poll_interval": 0.05},
+        daemon=True,
+    )
     thread.start()
     try:
         yield server
@@ -1008,3 +1012,72 @@ def test_cli_status_json_module_entry_and_error_paths(
         assert main(["completion", shell]) == 0
         out = capsys.readouterr().out
         assert "context" in out and "merge" in out and "encrypt" in out
+
+
+def test_crypto_kdf_params_compat_bounds_and_cli_scope_notice(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    seen_params: list[tuple[int, int, int]] = []
+
+    class _TrackingScrypt(_FakeScrypt):
+        def __init__(self, *, salt: bytes, length: int, n: int, r: int, p: int) -> None:
+            super().__init__(salt=salt, length=length, n=n, r=r, p=p)
+            seen_params.append((n, r, p))
+            self._params = f"{n}:{r}:{p}".encode()
+
+        def derive(self, key_material: bytes) -> bytes:
+            return hashlib.sha256(key_material + self._salt + self._params).digest()[: self._length]
+
+    monkeypatch.setattr("engramkeep.crypto._require_crypto", lambda: (_FakeAESGCM, _TrackingScrypt))
+
+    envelope_text = encrypt_text("Sensitive note", "pass-xyz")
+    header, body = envelope_text.split("\n", 1)
+    assert header == ENVELOPE_HEADER
+    parsed = json.loads(body)
+    assert parsed["kdf_params"] == {"n": 2**15, "r": 8, "p": 1}
+    assert decrypt_text(envelope_text, "pass-xyz") == "Sensitive note"
+
+    # Legacy v1.2.0 envelope without kdf_params remains decryptable
+    legacy = dict(parsed)
+    legacy.pop("kdf_params")
+    legacy_text = f"{ENVELOPE_HEADER}\n{json.dumps(legacy)}\n"
+    assert decrypt_text(legacy_text, "pass-xyz") == "Sensitive note"
+    assert seen_params[-1] == (2**15, 8, 1)
+
+    # Tampered / DoS-prone KDF parameters are rejected before key derivation
+    bad_params: list[object] = [
+        {"n": 2**25, "r": 8, "p": 1},
+        {"n": 10000, "r": 8, "p": 1},
+        {"n": 2**15, "r": 0, "p": 1},
+        {"n": 2**15, "r": 8, "p": 99},
+        {"n": True, "r": 8, "p": 1},
+        "invalid",
+    ]
+    for bad in bad_params:
+        tampered = dict(parsed)
+        tampered["kdf_params"] = bad
+        tampered_text = f"{ENVELOPE_HEADER}\n{json.dumps(tampered)}\n"
+        with pytest.raises(CryptoError):
+            decrypt_text(tampered_text, "pass-xyz")
+
+    # Unsupported KDF name is rejected
+    bad_kdf = dict(parsed)
+    bad_kdf["kdf"] = "argon2"
+    with pytest.raises(CryptoError, match="unsupported KDF"):
+        decrypt_text(f"{ENVELOPE_HEADER}\n{json.dumps(bad_kdf)}\n", "pass-xyz")
+
+    # CLI encrypt prints partial-scope and backup-pruning guidance
+    store = Store(tmp_path / "brain")
+    store.init()
+    store.remember("alpha", "Encrypted note")
+    assert main(["--home", str(store.home), "encrypt"]) == 0
+    dry_out = capsys.readouterr().out
+    assert "remain plaintext" in dry_out
+
+    monkeypatch.setenv(ENV_PASSPHRASE, "store-pass")
+    assert main(["--home", str(store.home), "encrypt", "--apply"]) == 0
+    apply_out = capsys.readouterr().out
+    assert "remain plaintext" in apply_out
+    assert "Prune the unencrypted backup directory" in apply_out

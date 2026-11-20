@@ -47,8 +47,11 @@ REQUIRED_FILES = [
     "docs/ARCHITECTURE.md",
     "docs/BENCHMARK.md",
     "docs/PRIVACY.md",
+    "docs/PRIVACY.tr.md",
     "docs/THREAT_MODEL.md",
     "docs/COMPATIBILITY.md",
+    "docs/COMPATIBILITY.tr.md",
+    "docs/EXIT_CODES.md",
     "docs/ROADMAP.md",
     "docs/RELEASING.md",
     "docs/GOOD_FIRST_ISSUES.md",
@@ -243,9 +246,10 @@ def check_source_code(root: Path, failures: list[str]) -> None:
 
 
 def check_parity(root: Path, failures: list[str]) -> None:
-    """Verify package version and bundled SKILL.md stay synchronized."""
+    """Verify package version, release docs, and bundled SKILL.md stay synchronized."""
     pyproject = root / "pyproject.toml"
     init_py = root / "src" / "engramkeep" / "__init__.py"
+    current_version: str | None = None
     if pyproject.is_file() and init_py.is_file():
         py_match = re.search(
             r'^version\s*=\s*"([^"]+)"', pyproject.read_text(encoding="utf-8"), re.MULTILINE
@@ -253,11 +257,34 @@ def check_parity(root: Path, failures: list[str]) -> None:
         init_match = re.search(
             r'^__version__\s*=\s*"([^"]+)"', init_py.read_text(encoding="utf-8"), re.MULTILINE
         )
+        if py_match:
+            current_version = py_match.group(1)
         if py_match and init_match and py_match.group(1) != init_match.group(1):
             failures.append(
                 f"version mismatch: pyproject.toml ({py_match.group(1)}) != "
                 f"__init__.py ({init_match.group(1)})"
             )
+
+    if current_version:
+        changelog = root / "CHANGELOG.md"
+        if changelog.is_file():
+            changelog_text = changelog.read_text(encoding="utf-8")
+            version_heading = re.compile(
+                rf"^##\s+\[?{re.escape(current_version)}\]?(?:\s|$)", re.MULTILINE
+            )
+            if not version_heading.search(changelog_text):
+                failures.append(f"CHANGELOG.md is missing a heading for version {current_version}")
+
+        security = root / "SECURITY.md"
+        parts = current_version.split(".")
+        if security.is_file() and len(parts) >= 2:
+            series = f"{parts[0]}.{parts[1]}.x"
+            security_text = security.read_text(encoding="utf-8")
+            supported_row = re.compile(rf"^\|\s*{re.escape(series)}\s*\|\s*Yes\s*\|", re.MULTILINE)
+            if not supported_row.search(security_text):
+                failures.append(
+                    f"SECURITY.md supported versions table does not list {series} as Yes"
+                )
 
     repo_skill = root / "skills" / "engramkeep" / "SKILL.md"
     pkg_skill = root / "src" / "engramkeep" / "data" / "SKILL.md"

@@ -208,6 +208,7 @@
   "no_match_queries": [
     "kubernetes ingress certificate renewal",
     "excel formülü tarih biçimi",
-    "rust borrow checker lifetime"
+    "rust borrow checker lifetime",
+    "blender uv unwrap texture baking"
   ]
 }

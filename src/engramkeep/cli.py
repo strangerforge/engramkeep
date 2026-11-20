@@ -561,6 +561,13 @@ def _cmd_crypto(args: argparse.Namespace, *, operation: str) -> int:
         print("Dry run: no files were modified. Pass --apply to execute.")
     elif result.backup_dir:
         print(f"Backup: {result.backup_dir}")
+        if operation == "encrypt":
+            print("Note: Prune the unencrypted backup directory once you verify decryption.")
+    if operation == "encrypt":
+        print(
+            "Scope: encrypts projects/*.md and TROUBLESHOOTING.md only; "
+            "INDEX.md, RECENT_ACTIVITY.md, audit.log, and meta.json remain plaintext."
+        )
     return 0
 
 
@@ -786,6 +793,16 @@ def _cmd_completion(args: argparse.Namespace) -> int:
     return 0
 
 
+def _non_negative_int(value: str) -> int:
+    try:
+        parsed = int(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(f"invalid integer value: {value!r}") from exc
+    if parsed < 0:
+        raise argparse.ArgumentTypeError("value must be >= 0")
+    return parsed
+
+
 def _add_local_arg(subparser: argparse.ArgumentParser) -> None:
     subparser.add_argument(
         "--local",
@@ -887,7 +904,12 @@ def build_parser() -> argparse.ArgumentParser:
     search.add_argument(
         "--tag", action="append", default=[], help="filter by tag (repeatable, AND)"
     )
-    search.add_argument("--limit", type=int, default=10, help="maximum results (>= 0, default: 10)")
+    search.add_argument(
+        "--limit",
+        type=_non_negative_int,
+        default=10,
+        help="maximum results (integer >= 0, default: 10)",
+    )
     _add_layer_args(search)
     search.add_argument("--json", action="store_true", help="print JSON")
     search.set_defaults(handler=_cmd_search)
@@ -952,7 +974,12 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="search terms (run without it to list the newest fixes)",
     )
-    fixes.add_argument("--limit", type=int, default=10, help="maximum results (>= 0, default: 10)")
+    fixes.add_argument(
+        "--limit",
+        type=_non_negative_int,
+        default=10,
+        help="maximum results (integer >= 0, default: 10)",
+    )
     _add_layer_args(fixes)
     fixes.add_argument("--json", action="store_true", help="print JSON")
     fixes.set_defaults(handler=_cmd_fixes)

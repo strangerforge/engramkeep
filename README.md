@@ -26,7 +26,7 @@ Windsurf, Gemini CLI, Antigravity, or anything that can read `AGENTS.md` — the
 same persistent, human-readable project memory. It runs on the Python standard
 library alone.
 
-> **Status: 1.2.0 stable.** Local-first Markdown store, budget-bounded
+> **Status: 1.2.1 stable.** Local-first Markdown store, budget-bounded
 > `context` packer (`engramkeep context` & MCP `engramkeep_context`), layered
 > project (`.engramkeep/`) + global memory across CLI/MCP/dashboard, ADR
 > decision lifecycle (`supersede`, `untag`, `merge`, `trash`/`restore`),
@@ -64,7 +64,7 @@ own.
 
 ---
 
-## What works in 1.2.0
+## What works in 1.2.1
 
 | Area | Status |
 | --- | --- |

@@ -8,146 +8,73 @@ existing one.
 Read [CONTRIBUTING.md](../CONTRIBUTING.md) and [AGENTS.md](../AGENTS.md) first.
 Every change needs a test and a passing `python -m pytest`.
 
-## 1. Add an explicit `--dry-run` flag to `engramkeep install`
+## 1. Show a transparent Windows permissions note in `engramkeep doctor`
+
+**Area:** store · **Difficulty:** small
+
+On POSIX systems, `engramkeep doctor` verifies `0o700` / `0o600` file
+permissions via `is_private_path()`. On Windows, NTFS ACLs are not represented
+by POSIX mode bits, so `is_private_path()` treats the check as satisfied. Add
+an informational line to the human `doctor` output on Windows noting that POSIX
+permission checks are skipped (without marking the store unhealthy).
+
+- Files: `src/engramkeep/cli.py`, `tests/test_cli.py`
+- Done when: Windows `doctor` output includes a clear informational note, exit
+  code stays `0` on healthy stores, and tests cover both POSIX and Windows
+  output paths.
+
+## 2. Add a malformed Codex TOML config test for `engramkeep install`
 
 **Area:** installer · **Difficulty:** small
 
-The installer is already a dry run by default, but scripts and muscle memory
-expect `--dry-run`. Add the flag as an explicit alias that cannot be combined
-with `--apply` or `--uninstall`.
+`tests/test_installer.py` already covers malformed JSON MCP configs, symlinks,
+and unreadable encodings, but Codex MCP registration uses a TOML managed block
+in `config.toml`. Add regression tests for an existing `config.toml` containing
+broken or mismatched managed-block markers.
 
-- Files: `src/engramkeep/cli.py`, `tests/test_cli.py`
-- Done when: `engramkeep install --agent opencode --dry-run` prints the plan,
-  `--dry-run --apply` exits with a usage error, and tests cover both.
+- Files: `src/engramkeep/installer.py`, `tests/test_installer.py`
+- Done when: broken/mismatched TOML markers are refused safely without
+  modifying the user's file, and tests cover dry-run and apply modes.
 
-## 2. Show the active store path in `engramkeep dashboard`
+## 3. Add property-based regression tests for redaction and frontmatter parsing
 
-**Area:** dashboard · **Difficulty:** small
+**Area:** testing · **Difficulty:** medium
 
-The dashboard header says "Local-first project memory" but not which store it
-serves. Print the resolved home in the header or the status line so a user with
-several stores can tell them apart.
+Add optional `hypothesis` property-based tests (under `[project.optional-dependencies]`
+`dev` only — zero runtime dependencies) exercising `redact_text()`,
+`parse_card()`, and `safe_join()` against arbitrary Unicode, control
+characters, and deeply nested inputs.
 
-- Files: `src/engramkeep/dashboard.py`, `tests/test_dashboard.py`
-- Done when: the page exposes the store path as text, the token and CSP rules
-  are unchanged, and a test asserts the rendered path.
+- Files: `pyproject.toml`, new `tests/test_properties.py`
+- Done when: tests run quickly in CI, never fail on arbitrary UTF-8 inputs, and
+  verify `safe_join()` containment and redaction invariants.
 
-## 3. Add a `--limit` test matrix for search and fixes
-
-**Area:** CLI · **Difficulty:** small
-
-`--limit` accepts any integer. Cover `0`, `1`, a value larger than the number of
-entries, and a negative value, and make the behavior explicit in help text.
-
-- Files: `src/engramkeep/cli.py`, `tests/test_cli.py`, `tests/test_fix_cli.py`
-- Done when: every case has a documented and tested result, and the help text
-  states the valid range.
-
-## 4. Add `engramkeep install --restore` for backups
-
-**Area:** installer · **Difficulty:** medium
-
-`engramkeep install --apply` writes timestamped backups and a `manifest.json`
-under `<home>/backups/installer/<run>/`, and `--uninstall` removes managed
-blocks cleanly. Add a `--restore <run>` option (dry-run by default) to copy
-backed-up files back to their original targets safely.
-
-- Files: `src/engramkeep/installer.py`, `src/engramkeep/cli.py`, `tests/test_installer.py`
-- Done when: `--restore` previews changes by default, `--apply` restores the
-  recorded backups after symlink/path checks, and tests cover both.
-
-## 5. Document exit codes
+## 4. Add a Turkish translation for `docs/EXIT_CODES.md`
 
 **Area:** docs · **Difficulty:** small
 
-Users script around `engramkeep`. Write a short table of exit codes for
-`doctor`, `search`, `show`, `fixes`, `install`, and argument errors, and link
-it from the README.
+`docs/COMPATIBILITY.md` and `docs/PRIVACY.md` now have Turkish counterparts
+(`COMPATIBILITY.tr.md` and `PRIVACY.tr.md`), while `docs/EXIT_CODES.md` is
+English-only. Translate it without changing the meaning and link both versions
+at the top.
 
-- Files: new `docs/EXIT_CODES.md`, `README.md`, `README.tr.md`
-- Done when: the table matches the code and every row is verified by a test or
-  a manual command.
+- Files: `docs/EXIT_CODES.tr.md`, `docs/EXIT_CODES.md`
+- Done when: both files link to each other, keep identical tables and exit
+  codes, and `python scripts/check_repo_hygiene.py` passes.
 
-## 6. Add Turkish translations for the short docs
+## 5. Add an additional language concept pack (opt-in, zero dependencies)
 
-**Area:** docs · **Difficulty:** medium
+**Area:** search · **Difficulty:** medium
 
-`README.tr.md` exists, but `docs/COMPATIBILITY.md` and `docs/PRIVACY.md` are
-English-only. Translate them without changing the meaning, and add a language
-link at the top.
+`src/engramkeep/concepts.py` provides a small deterministic English/Turkish
+concept map for cross-language recall without embeddings or network calls. Add
+a focused, synthetic benchmark-backed concept pack for one more language
+(for example German or Spanish) while keeping search deterministic and fast.
 
-- Files: `docs/COMPATIBILITY.tr.md`, `docs/PRIVACY.tr.md`
-- Done when: both files exist, link to the English originals, and use the same
-  headings and tables.
-
-## 7. Add a `doctor` check for duplicate card titles
-
-**Area:** store · **Difficulty:** medium
-
-Two cards can share a title. `doctor` should warn when that happens so the user
-can rename or merge them, without treating it as a hard error.
-
-- Files: `src/engramkeep/store.py`, `tests/test_store.py`
-- Done when: duplicates produce a warning naming both project ids, the store
-  stays healthy, and a test covers the warning.
-
-## 8. Add a `--since` filter to `recent`
-
-**Area:** CLI · **Difficulty:** medium
-
-`recent` always shows the newest entries. Add `--since YYYY-MM-DD` so a user can
-see what changed in a sprint.
-
-- Files: `src/engramkeep/cli.py`, `tests/test_cli.py`
-- Done when: the filter uses the timestamp prefix in `RECENT_ACTIVITY.md`,
-  invalid dates produce a clear error, and help text includes an example.
-
-## 9. Add an installer fixture for a file with no trailing newline
-
-**Area:** installer · **Difficulty:** small
-
-The managed-block writer must behave correctly when the existing file ends
-without a newline. Add the fixture and the assertion; fix the writer if the
-test exposes a missing separator.
-
-- Files: `src/engramkeep/installer.py`, `tests/test_installer.py`
-- Done when: apply and uninstall round-trip byte-for-byte on a file without a
-  trailing newline.
-
-## 10. Add a no-match benchmark entry that should stay clean
-
-**Area:** benchmark · **Difficulty:** small
-
-The current no-match control reports two clean results out of three. Add one
-clearly unrelated query that must return nothing, and keep the existing
-honest reporting for the ambiguous one.
-
-- Files: `examples/fix-registry/fixes.json`, `docs/BENCHMARK.md`
-- Done when: the new query is unrelated to every entry, the benchmark still
-  passes its floor, and the report does not hide the ambiguous case.
-
-## 11. Improve the MCP status output with the store path
-
-**Area:** MCP · **Difficulty:** small
-
-`engramkeep mcp --status` prints transport, protocol, and write mode, but not
-which store the server will read.
-
-- Files: `src/engramkeep/cli.py`, `tests/test_cli.py`
-- Done when: the status includes the resolved home, JSON output includes it
-  too, and a test covers both.
-
-## 12. Add a screenshot check to the docs build
-
-**Area:** docs · **Difficulty:** medium
-
-`assets/dashboard.png` and `assets/demo.gif` can drift from the current UI. Add
-a small script that fails when a referenced asset is missing or larger than a
-documented budget.
-
-- Files: new `scripts/check_docs_assets.py`, `tests/test_examples.py`
-- Done when: missing files fail, oversized files fail with the actual size, and
-  the check runs in CI.
+- Files: `src/engramkeep/concepts.py`, `tests/test_concepts.py`
+- Done when: zero new runtime dependencies, no project-specific terms, and
+  cross-language recall tests pass without regressing the existing EN/TR
+  benchmark.
 
 ---
 

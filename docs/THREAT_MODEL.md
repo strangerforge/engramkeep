@@ -1,7 +1,7 @@
 # Threat model
 
 This document describes the security assumptions and known limitations of
-Engramkeep 1.2.0. It is intentionally conservative.
+Engramkeep 1.2.1. It is intentionally conservative.
 
 ## Assets
 
@@ -30,7 +30,7 @@ Engramkeep 1.2.0. It is intentionally conservative.
 
 ## Threats and mitigations
 
-| Threat | Mitigation in 1.2.0 | Residual risk |
+| Threat | Mitigation in 1.2.1 | Residual risk |
 | --- | --- | --- |
 | Path traversal through a project name, URI, or backup run id | `normalize_project_id()` rejects separators, drive letters, control characters, and traversal; `safe_join()` proves containment across CLI, MCP tools/resources, dashboard, trash/restore, `install --restore`, and `migrate --rollback` (confined strictly to `<home>/backups/migrations/`) | A bug in a future caller could bypass the helper |
 | Symlink / NTFS junction escape | `safe_join()` resolves symlinks; `is_link_or_junction()` checks symlinks and Windows reparse points across store, trash, project discovery, MCP `resources/read`, importer & `--discover`, installer & `--restore`, migrations, crypto, and sync | OS-specific edge cases on exotic filesystems |
@@ -42,7 +42,7 @@ Engramkeep 1.2.0. It is intentionally conservative.
 | Destructive deletion or failed migration | `forget` moves to `trash/` (recoverable via `restore`); `trash --purge` requires `--yes`; `doctor --fix` and `migrate --apply` create timestamped backups, auto-rollback failed migrations, and clean up stray files created mid-migration | Deleting backup directories removes rollback snapshots |
 | Accidental secret leak, ghost files, or force-push in Git sync (`sync.py`) | Explicit allowlist only (`meta.json`, `INDEX.md`, `TROUBLESHOOTING.md`, `projects/*.md`) plus allowlisted tracked deletions (`git rm --cached`); never runs `git add -A` or `git push`; `store.doctor()` must pass before commit; `shell=False` with resolved `git` binary | User can still manually stage excluded files or push sensitive non-redacted text |
 | Unsafe installer or broken ephemeral `.venv` MCP path | Dry-run by default; managed blocks only (Markdown HTML comments + Codex TOML comments); shared targets deduplicated; refuses symlinks and unreadable JSON; ignores ephemeral `.venv` binary when resolving portable MCP command; timestamped backups + `manifest.json` + `--restore`; `--mcp` is read-only unless `--mcp-allow-write` is passed | Deleting the installer backup directory removes automatic snapshots |
-| Passphrase leakage or silent corruption in optional encryption (`crypto.py`) | `cryptography` extra is strictly optional; passphrases read via `ENGRAMKEEP_PASSPHRASE` or `getpass` (never CLI args); AES-256-GCM with AAD `engramkeep-enc-v1` + Scrypt KDF detects wrong keys and tampering; dry-run by default with timestamped backups under `backups/crypto/` | Forgotten passphrases cannot be recovered; unencrypted backup directories must be pruned by the user |
+| Passphrase leakage or silent corruption in optional encryption (`crypto.py`) | `cryptography` extra is strictly optional; passphrases read via `ENGRAMKEEP_PASSPHRASE` or `getpass` (never CLI args); AES-256-GCM with AAD `engramkeep-enc-v1` + Scrypt KDF (with bounded `kdf_params` stored in envelope) detects wrong keys and tampering; dry-run by default with timestamped backups under `backups/crypto/` | Partial scope: `INDEX.md`, `RECENT_ACTIVITY.md`, `audit.log`, and `meta.json` stay plaintext; forgotten passphrases cannot be recovered; unencrypted backup directories must be pruned by the user |
 | Supply-chain dependency & release integrity | Zero required runtime dependencies (Python stdlib only); pinned GitHub Actions commit SHAs; `SHA256SUMS.txt` checksums and SLSA build provenance attestation (`actions/attest-build-provenance`) on releases | Dev/build tooling and optional `engramkeep[crypto]` remain external packages |
 | MCP abuse or network exposure | stdio transport only; no network listener; multi-version negotiation (`2024-11-05`..`2025-11-25`); read-only by default; no forget tool; 1 MiB line cap and 32-item batch cap | A client started with `--allow-write` can add/supersede decisions and fixes |
 | Dashboard CSRF / DNS rebinding / token leakage | `127.0.0.1` exclusive bind; per-session token in URL fragment -> `sessionStorage` -> `X-Engramkeep-Token`; strict Host + Origin checks; POST-only mutations (`remember`, `fixes`, `supersede`, `restore`) with `confirm: true`; no forget endpoint | Same-user local processes or browser extensions are outside the model |

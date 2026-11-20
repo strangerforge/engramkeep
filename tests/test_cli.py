@@ -281,3 +281,34 @@ def test_install_list_flag(capsys: pytest.CaptureFixture[str]) -> None:
     out = capsys.readouterr().out
     assert "Agent: OpenCode" in out
     assert "Agent: Claude Code" in out
+
+
+def test_search_limit_matrix(cli_home: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    assert main(["init"]) == 0
+    assert main(["remember", "alpha", "Use sqlite cache for local queries"]) == 0
+    assert main(["remember", "beta", "Use sqlite WAL mode for local queries"]) == 0
+    capsys.readouterr()
+
+    # limit=0 returns empty result list
+    assert main(["search", "sqlite", "--limit", "0", "--json"]) == 0
+    assert json.loads(capsys.readouterr().out) == []
+
+    # limit=1 caps results to 1
+    assert main(["search", "sqlite", "--limit", "1", "--json"]) == 0
+    assert len(json.loads(capsys.readouterr().out)) == 1
+
+    # limit larger than matches returns all matches
+    assert main(["search", "sqlite", "--limit", "99", "--json"]) == 0
+    assert len(json.loads(capsys.readouterr().out)) == 2
+
+    # negative limit fails with argparse usage error (exit code 2)
+    with pytest.raises(SystemExit) as excinfo:
+        main(["search", "sqlite", "--limit", "-1"])
+    assert excinfo.value.code == 2
+    assert ">= 0" in capsys.readouterr().err
+
+    # help text documents valid range
+    with pytest.raises(SystemExit) as help_exc:
+        main(["search", "--help"])
+    assert help_exc.value.code == 0
+    assert ">= 0" in capsys.readouterr().out

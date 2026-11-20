@@ -25,7 +25,7 @@ Engramkeep; Codex, Claude Code, OpenCode, Cursor, Windsurf, Gemini CLI,
 Antigravity veya `AGENTS.md` okuyabilen her ajanın aynı proje hafızasını
 kullanmasını sağlar. Yalnızca Python standart kütüphanesiyle çalışır.
 
-> **Durum: 1.2.0 kararlı.** Yerel-öncelikli Markdown deposu, bütçe sınırlı
+> **Durum: 1.2.1 kararlı.** Yerel-öncelikli Markdown deposu, bütçe sınırlı
 > `context` paketleyici (`engramkeep context` ve MCP `engramkeep_context`),
 > CLI/MCP/panel genelinde katmanlı proje (`.engramkeep/`) + global hafıza,
 > ADR karar yaşam döngüsü (`supersede`, `untag`, `merge`, `trash`/`restore`),
@@ -63,7 +63,7 @@ denetlenebilir bir hafıza katmanıdır.
 
 ---
 
-## 1.2.0'da ne çalışıyor?
+## 1.2.1'da ne çalışıyor?
 
 | Alan | Durum |
 | --- | --- |
@@ -486,7 +486,7 @@ Küçük, denetlenebilir ve taşınabilir bir hafıza istiyorsanız Engramkeep d
 - **MCP yereldir ve varsayılan olarak salt-okunurdur.** Stdio kullanır, ağ dinleyicisi açmaz, unutma aracı sunmaz, yazma araçlarını yalnızca `--allow-write` ile açar.
 - **Panel yalnızca loopback'te ve token korumalı.** `127.0.0.1`, oturum başına token, sıkı CSP, metin olarak işleme, yalnızca `--allow-write` + açık onay ile yazma.
 
-Hassas bir ortamda kullanmadan önce [docs/PRIVACY.md](docs/PRIVACY.md) ve
+Hassas bir ortamda kullanmadan önce [docs/PRIVACY.tr.md](docs/PRIVACY.tr.md) ve
 [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md) dosyalarını oku.
 
 ---

@@ -61,3 +61,35 @@ def test_fix_requires_solution(cli_home: Path) -> None:
 def test_fix_rejects_blank_error(cli_home: Path, capsys: pytest.CaptureFixture[str]) -> None:
     assert main(["fix", "   ", "--solution", "some fix"]) == 1
     assert "error" in capsys.readouterr().err.lower()
+
+
+def test_fixes_limit_matrix(cli_home: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    assert (
+        main(["fix", "port 8080 busy", "--solution", "Stop old process", "--project", "one"]) == 0
+    )
+    assert main(["fix", "port 8080 conflict", "--solution", "Use 8081", "--project", "two"]) == 0
+    capsys.readouterr()
+
+    # limit=0 returns empty result list
+    assert main(["fixes", "port 8080", "--limit", "0", "--json"]) == 0
+    assert json.loads(capsys.readouterr().out) == []
+
+    # limit=1 caps results to 1
+    assert main(["fixes", "port 8080", "--limit", "1", "--json"]) == 0
+    assert len(json.loads(capsys.readouterr().out)) == 1
+
+    # limit larger than matches returns all matches
+    assert main(["fixes", "port 8080", "--limit", "50", "--json"]) == 0
+    assert len(json.loads(capsys.readouterr().out)) == 2
+
+    # negative limit fails with argparse usage error (exit code 2)
+    with pytest.raises(SystemExit) as excinfo:
+        main(["fixes", "port 8080", "--limit", "-3"])
+    assert excinfo.value.code == 2
+    assert ">= 0" in capsys.readouterr().err
+
+    # help text documents valid range
+    with pytest.raises(SystemExit) as help_exc:
+        main(["fixes", "--help"])
+    assert help_exc.value.code == 0
+    assert ">= 0" in capsys.readouterr().out

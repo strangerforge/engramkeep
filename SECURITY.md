@@ -4,14 +4,14 @@
 
 | Version | Supported |
 | --- | --- |
-| 0.5.x | Yes |
-| 0.4.x | No |
-| 0.3.x | No |
-| 0.2.x | No |
-| 0.1.x | No |
+| 1.2.x | Yes |
+| 1.0.x | No |
+| 0.6.x | No |
+| 0.5.x | No |
 | Older | No |
 
-Engramkeep is alpha software. Security fixes are applied to the latest release.
+Engramkeep follows semantic versioning. Security fixes are applied to the latest
+1.x release.
 
 ## Reporting a vulnerability
 
@@ -61,7 +61,9 @@ Out of scope:
   risk; report it if the core itself treats card text as instructions),
 - same-user malware or a compromised host,
 - secrets that the documented redaction cannot detect,
-- missing encryption at rest (documented limitation),
+- plaintext store metadata/index/audit/backup files when using optional partial
+  at-rest encryption (`engramkeep[crypto]` encrypts `projects/*.md` and
+  `TROUBLESHOOTING.md` only; documented limitation),
 - issues in third-party agents or their configuration formats.
 
 ## Safe harbor

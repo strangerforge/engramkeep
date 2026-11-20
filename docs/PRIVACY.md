@@ -1,5 +1,7 @@
 # Privacy
 
+> **English** | [Türkçe](PRIVACY.tr.md)
+
 Engramkeep is local-first by design. The core does not create an account,
 collect telemetry, contact a server, or upload memory.
 
@@ -77,6 +79,18 @@ optional extra `pip install 'engramkeep[crypto]'` and use `engramkeep encrypt`
 / `engramkeep decrypt`. Passphrases are read from `ENGRAMKEEP_PASSPHRASE` or an
 interactive terminal prompt (`getpass`), never from CLI arguments (avoiding
 shell history and process-list leaks).
+
+**Scope and limitations:**
+
+- Encryption covers `projects/*.md` and `TROUBLESHOOTING.md` only.
+- `INDEX.md`, `RECENT_ACTIVITY.md`, `audit.log`, and `meta.json` remain
+  plaintext (project ids, titles, tags, and activity timestamps are still
+  visible in those files).
+- `engramkeep encrypt --apply` writes a pre-encryption plaintext backup under
+  `<home>/backups/crypto/`; delete old crypto backups once you verify you can
+  decrypt successfully.
+- For transparent, whole-directory confidentiality, prefer OS full-disk
+  encryption (BitLocker, FileVault, LUKS).
 
 ## Transcript discovery and import
 

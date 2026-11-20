@@ -34,6 +34,10 @@ _AAD = b"engramkeep-enc-v1"
 _SCRYPT_N = 2**15
 _SCRYPT_R = 8
 _SCRYPT_P = 1
+_MIN_SCRYPT_N = 2**10
+_MAX_SCRYPT_N = 2**20
+_MAX_SCRYPT_R = 32
+_MAX_SCRYPT_P = 16
 _KEY_BYTES = 32
 _SALT_BYTES = 16
 _NONCE_BYTES = 12
@@ -101,9 +105,44 @@ def resolve_passphrase(
     return value
 
 
-def _derive_key(passphrase: str, salt: bytes) -> bytes:
+def _is_strict_int(value: object) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool)
+
+
+def _validate_kdf_params(raw_params: object) -> tuple[int, int, int]:
+    """Validate optional Scrypt KDF parameters from an envelope, falling back to v1 defaults."""
+    if raw_params is None:
+        return _SCRYPT_N, _SCRYPT_R, _SCRYPT_P
+    if not isinstance(raw_params, dict):
+        raise CryptoError("invalid KDF parameters in encryption envelope")
+    n = raw_params.get("n")
+    r = raw_params.get("r")
+    p = raw_params.get("p")
+    if not (_is_strict_int(n) and _is_strict_int(r) and _is_strict_int(p)):
+        raise CryptoError("KDF parameters must be integers")
+    assert isinstance(n, int) and isinstance(r, int) and isinstance(p, int)
+    if n < _MIN_SCRYPT_N or n > _MAX_SCRYPT_N or (n & (n - 1)) != 0:
+        raise CryptoError(
+            f"unsupported Scrypt cost parameter n={n} (expected power of two in "
+            f"[{_MIN_SCRYPT_N}, {_MAX_SCRYPT_N}])"
+        )
+    if not (1 <= r <= _MAX_SCRYPT_R):
+        raise CryptoError(f"unsupported Scrypt block size r={r}")
+    if not (1 <= p <= _MAX_SCRYPT_P):
+        raise CryptoError(f"unsupported Scrypt parallelization p={p}")
+    return n, r, p
+
+
+def _derive_key(
+    passphrase: str,
+    salt: bytes,
+    *,
+    n: int = _SCRYPT_N,
+    r: int = _SCRYPT_R,
+    p: int = _SCRYPT_P,
+) -> bytes:
     _, scrypt_cls = _require_crypto()
-    kdf = scrypt_cls(salt=salt, length=_KEY_BYTES, n=_SCRYPT_N, r=_SCRYPT_R, p=_SCRYPT_P)
+    kdf = scrypt_cls(salt=salt, length=_KEY_BYTES, n=n, r=r, p=p)
     derived: bytes = kdf.derive(passphrase.encode("utf-8"))
     return derived
 
@@ -120,6 +159,7 @@ def encrypt_text(plaintext: str, passphrase: str) -> str:
     envelope = {
         "format": ENVELOPE_FORMAT,
         "kdf": "scrypt",
+        "kdf_params": {"n": _SCRYPT_N, "r": _SCRYPT_R, "p": _SCRYPT_P},
         "salt": base64.b64encode(salt).decode("ascii"),
         "nonce": base64.b64encode(nonce).decode("ascii"),
         "ciphertext": base64.b64encode(ciphertext).decode("ascii"),
@@ -138,6 +178,9 @@ def decrypt_text(envelope_text: str, passphrase: str) -> str:
         envelope = json.loads(raw_json)
         if not isinstance(envelope, dict) or envelope.get("format") != ENVELOPE_FORMAT:
             raise CryptoError("unsupported encryption envelope format")
+        if envelope.get("kdf", "scrypt") != "scrypt":
+            raise CryptoError(f"unsupported KDF: {envelope.get('kdf')!r}")
+        kdf_n, kdf_r, kdf_p = _validate_kdf_params(envelope.get("kdf_params"))
         salt = base64.b64decode(str(envelope["salt"]), validate=True)
         nonce = base64.b64decode(str(envelope["nonce"]), validate=True)
         ciphertext = base64.b64decode(str(envelope["ciphertext"]), validate=True)
@@ -146,7 +189,7 @@ def decrypt_text(envelope_text: str, passphrase: str) -> str:
     except Exception as exc:
         raise CryptoError(f"corrupted encryption envelope: {exc}") from exc
 
-    key = _derive_key(passphrase, salt)
+    key = _derive_key(passphrase, salt, n=kdf_n, r=kdf_r, p=kdf_p)
     try:
         plaintext: bytes = aesgcm_cls(key).decrypt(nonce, ciphertext, _AAD)
     except Exception as exc:

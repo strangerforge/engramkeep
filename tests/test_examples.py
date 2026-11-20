@@ -88,4 +88,5 @@ def test_benchmark_meets_the_documented_floor() -> None:
     assert result["top1"] / result["queries"] >= 0.90
     assert result["top3"] == result["queries"]
     assert result["turkish"]["top1"] / result["turkish"]["queries"] >= 0.90
-    assert result["no_match"]["clean"] >= 2
+    assert result["no_match"]["queries"] == 4
+    assert result["no_match"]["clean"] >= 3
