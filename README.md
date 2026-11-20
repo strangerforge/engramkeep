@@ -12,7 +12,7 @@
 # Engramkeep
 
 [![CI](https://github.com/strangerforge/engramkeep/actions/workflows/ci.yml/badge.svg)](https://github.com/strangerforge/engramkeep/actions/workflows/ci.yml)
-[![PyPI](https://img.shields.io/pypi/v/engramkeep.svg)](https://pypi.org/project/engramkeep/)
+[![PyPI](https://img.shields.io/pypi/v/engramkeep)](https://pypi.org/project/engramkeep/)
 [![Benchmark: 95.6% top-1](https://img.shields.io/badge/Benchmark-95.6%25%20top--1-blue.svg)](docs/BENCHMARK.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://www.python.org/)
