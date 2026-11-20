@@ -1,8 +1,9 @@
 # Releasing Engramkeep
 
 Releases are cut from `main` with a version bump commit and an annotated tag.
-The `Release` workflow verifies the tree, builds the distributions, publishes
-to PyPI through trusted publishing, and creates a GitHub release.
+The `Release` workflow verifies the tree, builds the distributions, generates
+`SHA256SUMS.txt`, signs SLSA build provenance attestations, publishes to PyPI
+through trusted publishing, and creates a GitHub release.
 
 ## One-time setup
 
@@ -14,8 +15,8 @@ to PyPI through trusted publishing, and creates a GitHub release.
    - Environment: `pypi`
 3. In the GitHub repository, create an environment named `pypi`. Optionally
    require a reviewer so a release needs a manual approval.
-4. Confirm that Actions has `id-token: write` permission for the publish job
-   (already set in `.github/workflows/release.yml`).
+4. Confirm that Actions has `id-token: write` permission for the publish and
+   attestation jobs (already set in `.github/workflows/release.yml`).
 
 No long-lived PyPI token is stored in the repository.
 
@@ -42,7 +43,8 @@ No long-lived PyPI token is stored in the repository.
    python scripts/benchmark_fix_registry.py --output docs/BENCHMARK.md
    ```
 
-3. **Update the version** in both places, keeping them identical:
+3. **Update the version** in both places, keeping them identical (enforced by
+   `scripts/check_repo_hygiene.py`):
 
    - `pyproject.toml` → `[project] version`
    - `src/engramkeep/__init__.py` → `__version__`
@@ -51,9 +53,12 @@ No long-lived PyPI token is stored in the repository.
    section. Use [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
    headings: Added, Changed, Deprecated, Removed, Fixed, Security.
 
-5. **Check the docs** that mention the version or behavior: `README.md`,
-   `README.tr.md`, `docs/ROADMAP.md`, `docs/COMPATIBILITY.md`, `AGENTS.md`,
-   `skills/engramkeep/SKILL.md`.
+5. **Check the docs and bundled skill** that mention the version or behavior:
+   `README.md`, `README.tr.md`, `docs/ROADMAP.md`, `docs/COMPATIBILITY.md`,
+   `docs/PRIVACY.md`, `docs/ARCHITECTURE.md`, `docs/THREAT_MODEL.md`,
+   `docs/EXIT_CODES.md`, `AGENTS.md`, `skills/engramkeep/SKILL.md`, and
+   `src/engramkeep/data/SKILL.md` (must match `skills/engramkeep/SKILL.md`
+   byte-for-byte).
 
 6. **Build and inspect locally.**
 
@@ -65,27 +70,31 @@ No long-lived PyPI token is stored in the repository.
    /tmp/engramkeep-release-venv/bin/engramkeep --version
    ```
 
-7. **Commit and tag.**
+7. **Stage explicitly, commit, and tag.** Never run `git add -A` blindly.
 
    ```bash
-   git add -A
-   git commit -m "Release 0.5.0"
-   git tag -a v0.5.0 -m "Engramkeep 0.5.0"
+   git status --short
+   git add pyproject.toml src/ tests/ docs/ skills/ templates/ scripts/ .github/ README.md README.tr.md CHANGELOG.md AGENTS.md
+   git commit -m "Release 1.2.0"
+   git tag -a v1.2.0 -m "Engramkeep 1.2.0"
    git push origin main
-   git push origin v0.5.0
+   git push origin v1.2.0
    ```
 
 8. **Watch the workflow.** It fails if the tag does not match
-   `__version__`, if tests or coverage fail, or if `twine check` rejects the
-   artifacts.
+   `__version__`, if tests, coverage, or hygiene checks fail, or if `twine check`
+   rejects the artifacts.
 
-9. **Verify the release.**
+9. **Verify the release and checksums.**
 
    ```bash
    python -m pip index versions engramkeep
    pipx install --force engramkeep
    engramkeep --version
    ```
+
+   Optionally verify the GitHub Release artifact provenance with
+   `gh attestation verify <wheel> --owner strangerforge`.
 
 10. **Announce.** Update the GitHub release notes if needed and follow
     [docs/LAUNCH.md](LAUNCH.md).
@@ -94,15 +103,17 @@ No long-lived PyPI token is stored in the repository.
 
 | Artifact | Purpose |
 | --- | --- |
-| `engramkeep-<version>-py3-none-any.whl` | Universal wheel |
-| `engramkeep-<version>.tar.gz` | Source distribution |
-| GitHub release | Tag notes plus both artifacts |
+| `engramkeep-<version>-py3-none-any.whl` | Universal wheel (PyPI + GitHub Release) |
+| `engramkeep-<version>.tar.gz` | Source distribution (PyPI + GitHub Release) |
+| `SHA256SUMS.txt` | SHA-256 checksums (GitHub Release) |
+| Build provenance attestation | Signed SLSA provenance via `actions/attest-build-provenance` |
+| GitHub release | Tag notes plus wheel, sdist, and `SHA256SUMS.txt` |
 
 ## If something goes wrong
 
 - **A job failed before publish.** Fix the tree, delete the local tag
-  (`git tag -d v0.5.0`), delete the remote tag
-  (`git push origin :refs/tags/v0.5.0`), and retry.
+  (`git tag -d v1.2.0`), delete the remote tag
+  (`git push origin :refs/tags/v1.2.0`), and retry.
 - **PyPI accepted the upload but the release is wrong.** Do not reuse the
   version. Bump the patch version and release again. If the release is
   unusable, yank it on PyPI; yanking hides it from resolution but keeps it
@@ -116,10 +127,11 @@ No long-lived PyPI token is stored in the repository.
 
 ## Versioning policy
 
-- `0.x` releases may change the CLI and the on-disk schema. Every schema
-  change needs a migration before `1.0.0`.
+- `1.x` releases follow semantic versioning and preserve backward compatibility
+  for existing stores; any on-disk schema changes include automated, reversible
+  migrations via `engramkeep migrate`.
 - Patch releases fix bugs without changing the file format.
-- Minor releases add features and may add fields, but keep existing stores
-  readable.
+- Minor releases add features and may add optional fields while keeping existing
+  stores readable.
 - Security fixes are released as soon as they are verified, without waiting
   for a feature release.

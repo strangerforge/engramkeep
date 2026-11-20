@@ -1,6 +1,6 @@
 # Launch playbook
 
-This is the plan for the public launch of Engramkeep 0.5.3. It assumes the
+This is the plan for the public launch of Engramkeep 1.2.0. It assumes the
 repository is `github.com/strangerforge/engramkeep` and the package is published
 on PyPI as `engramkeep`.
 
@@ -12,9 +12,11 @@ who install the tool, hit a real problem, and tell us what is missing.
 **One line:** Your AI agents forget. Your memory shouldn't.
 
 **Paragraph:** Engramkeep is local-first, Markdown-native memory for AI coding
-agents. It stores project decisions and resolved fixes as plain files, installs
-the protocol into ten agents with one backed-up command, and runs on the Python
-standard library alone. No account, no cloud, no vector database.
+agents. It stores project decisions and resolved fixes as plain files, packs
+budget-bounded context for any session, layers repo `.engramkeep/` memory over
+a global store, installs managed blocks/MCP/skills into ten agents with one
+backed-up command, and runs on the Python standard library alone. No account, no
+cloud, no vector database.
 
 **Who it is for:**
 
@@ -25,17 +27,19 @@ standard library alone. No account, no cloud, no vector database.
 **Who it is not for:**
 
 - Teams looking for a hosted memory API with semantic retrieval.
-- Anyone who wants automatic transcript scraping without reviewing what is
-  stored.
+- Anyone who wants automatic background transcript scraping without reviewing
+  what is stored.
 - Large corpora that genuinely need embeddings.
 
 **Proof points:**
 
-- 254 tests, 85% coverage, CI on Linux, macOS, and Windows.
+- 300 tests, 86%+ coverage, CI on Linux, macOS, and Windows across Python 3.10–3.13.
 - 95.6% top-1 and 100% top-3 on a reproducible 45-query EN/TR benchmark.
 - 100% top-1 for Turkish queries against English entries.
-- Ten supported agents, managed blocks, backups, and reversible uninstall.
-- Zero runtime dependencies.
+- Ten supported agents, 9 MCP configs (including Codex TOML), managed blocks,
+  backups, `--restore`, and reversible uninstall.
+- Zero required runtime dependencies (optional `engramkeep[crypto]` extra for
+  at-rest encryption).
 
 Do not claim semantic search, perfect recall, or native integrations that have
 not been tested. The benchmark page is the honest answer to "how good is it?".
@@ -53,8 +57,9 @@ not been tested. The benchmark page is the honest answer to "how good is it?".
 | Comparison table | README section | Comments asking "why not Mem0?" |
 
 Record a 60–90 second screen capture before launch: `pipx install`, `init`,
-`remember`, `fixes`, `install --apply`, `dashboard`. Keep it unedited except for
-speed. A terminal recording is more convincing than a polished promo.
+`remember`, `context`, `fixes`, `install --apply --mcp --skill`, `dashboard`.
+Keep it unedited except for speed. A terminal recording is more convincing than
+a polished promo.
 
 ## Repository settings
 
@@ -72,11 +77,12 @@ speed. A terminal recording is more convincing than a polished promo.
 
 ### Day -7 to Day -1
 
-- Publish 0.5.3 to PyPI through the release workflow.
+- Publish 1.2.0 to PyPI through the release workflow (with `SHA256SUMS.txt` and
+  SLSA build provenance attestation).
 - Verify a clean install in a fresh environment on Windows, macOS, and Linux.
 - Create the `good first issue` issues from
   [GOOD_FIRST_ISSUES.md](GOOD_FIRST_ISSUES.md).
-- Prepare the demo recording and three screenshots.
+- Prepare the demo recording and screenshots.
 - Write the Show HN and Reddit drafts below and have one person outside the
   project read them for clarity.
 - Do not ask for upvotes anywhere. It backfires and violates most community
@@ -96,16 +102,19 @@ Body:
 >
 > Engramkeep keeps memory in plain Markdown on my machine. A card is a file I
 > can open, diff, and back up. Resolved errors go into a troubleshooting
-> registry, so the same build failure is not debugged twice. One command writes
-> a managed, backed-up block into ten agent configs, and one command removes it.
+> registry, so the same build failure is not debugged twice. One command packs
+> budget-bounded session context (`engramkeep context`), layers repo
+> `.engramkeep/` decisions over global memory, and writes managed, backed-up
+> configs + MCP + skills into ten agents.
 >
 > It runs on the Python standard library. No account, no telemetry, no network
 > calls in the core. The repo includes a reproducible benchmark: 45 English and
-> Turkish queries over synthetic fixes, 95.6% top-1, 100% top-3. It is lexical,
-> not semantic, and the benchmark page says so.
+> Turkish queries over synthetic fixes, 95.6% top-1, 100% top-3. It is lexical
+> (BM25 + concepts + Turkish prefix), not semantic, and the benchmark page says
+> so.
 >
-> I would especially like feedback on the installer and on what is missing
-> before the storage format is frozen.
+> I would especially like feedback on the installer, layered repo memory, and
+> real-world transcript import across agents.
 
 Reply to every substantive comment for the first six hours. Link the benchmark
 when someone asks about recall. Link the installer section when someone asks
@@ -133,10 +142,10 @@ concrete result worth showing.
 
 ### Day 4 — MCP and agent communities
 
-- OpenCode, Claude Code, Cursor, and Windsurf community forums: post a short
-  "how to add persistent memory" guide, not a product announcement.
-- MCP directories: submit the server with the stdio command and the read-only
-  tool list.
+- OpenCode, Claude Code, Cursor, Codex, and Windsurf community forums: post a
+  short "how to add persistent memory" guide, not a product announcement.
+- MCP directories: submit the server with the stdio command, multi-version
+  negotiation, resources, prompts, and the read-only tool list.
 - Awesome lists: open a pull request only where the list explicitly accepts
   memory or MCP tools. Follow each list's contribution rules.
 
@@ -157,12 +166,12 @@ concrete result worth showing.
 > Your agents forget. Your memory shouldn't.
 >
 > Engramkeep is local-first, Markdown-native memory for AI coding agents:
-> - plain files you can read and diff
-> - one backed-up install for ten agents
-> - a troubleshooting registry for solved errors
-> - zero runtime dependencies
+> - plain files you can read and diff (global + repo `.engramkeep/` layers)
+> - one backed-up install for ten agents (rules + MCP + SKILL.md)
+> - budget-bounded `engramkeep context` & troubleshooting registry
+> - zero required runtime dependencies
 >
-> 254 tests. 85% coverage. 95.6% top-1 on a reproducible EN/TR benchmark.
+> 300 tests. 86%+ coverage. 95.6% top-1 on a reproducible EN/TR benchmark.
 >
 > pipx install engramkeep
 > github.com/strangerforge/engramkeep
@@ -179,12 +188,11 @@ concrete result worth showing.
 ### Comment reply: "Does it work with <agent>?"
 
 > The installer supports OpenCode, Claude Code, OpenAI Codex, Cursor, Windsurf,
-> Gemini CLI, Antigravity, GitHub Copilot, Cline, and Roo Code. Run
-> `engramkeep install --list` to see the exact target paths on your platform,
-> then `engramkeep install --agent <id>` for a dry run. If your agent reads
-> `AGENTS.md` or `SKILL.md`, the templates work even when there is no dedicated
-> installer entry. Tell me which agent you use and I will add it if the target
-> path is documented.
+> Gemini CLI, Antigravity, GitHub Copilot, Cline, and Roo Code (9 with MCP
+> registration including Codex TOML). Run `engramkeep install --list` to see the
+> exact target paths on your platform, then `engramkeep install --agent <id>`
+> for a dry run. If your agent reads `AGENTS.md` or `SKILL.md`, the templates
+> work even when there is no dedicated installer entry.
 
 ## What to measure
 
@@ -208,5 +216,5 @@ healthier than 3,000 stars and no installs.
 - Cut a patch release for launch-week bugs within a few days.
 - Write down the three most common misunderstandings and fix the README, not
   just the reply.
-- Revisit the roadmap after two weeks of real usage. The next milestone is
-  transcript import and schema migrations, not more launch posts.
+- Revisit `docs/ROADMAP.md` after two weeks of real usage to prioritize
+  community-driven agent adapters, search refinements, and workflow ergonomics.

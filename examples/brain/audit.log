@@ -1,2 +1,2 @@
-{"action": "init", "schema_version": 1, "ts": "2026-01-01T00:00:00Z"}
-{"action": "remember", "added": true, "created": true, "project": "example-project", "tags": ["demo", "docs"], "ts": "2026-01-02T12:00:00Z"}
+{"action": "init", "hash": "2a59c0c804c59bc3f81202ef01bedf9882e80b41498ab2a32fb0552c77a3a49a", "prev_hash": "0000000000000000000000000000000000000000000000000000000000000000", "schema_version": 1, "ts": "2026-01-01T00:00:00Z"}
+{"action": "remember", "added": true, "created": true, "hash": "6f67e62d00870113cdec769aed080a5eff56cc176ae6085b4720d295ff0f8237", "prev_hash": "2a59c0c804c59bc3f81202ef01bedf9882e80b41498ab2a32fb0552c77a3a49a", "project": "example-project", "tags": ["demo", "docs"], "ts": "2026-01-02T12:00:00Z"}

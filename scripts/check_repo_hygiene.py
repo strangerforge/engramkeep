@@ -242,6 +242,36 @@ def check_source_code(root: Path, failures: list[str]) -> None:
                 failures.append(f"dangerous call {label!r} in {rel}")
 
 
+def check_parity(root: Path, failures: list[str]) -> None:
+    """Verify package version and bundled SKILL.md stay synchronized."""
+    pyproject = root / "pyproject.toml"
+    init_py = root / "src" / "engramkeep" / "__init__.py"
+    if pyproject.is_file() and init_py.is_file():
+        py_match = re.search(
+            r'^version\s*=\s*"([^"]+)"', pyproject.read_text(encoding="utf-8"), re.MULTILINE
+        )
+        init_match = re.search(
+            r'^__version__\s*=\s*"([^"]+)"', init_py.read_text(encoding="utf-8"), re.MULTILINE
+        )
+        if py_match and init_match and py_match.group(1) != init_match.group(1):
+            failures.append(
+                f"version mismatch: pyproject.toml ({py_match.group(1)}) != "
+                f"__init__.py ({init_match.group(1)})"
+            )
+
+    repo_skill = root / "skills" / "engramkeep" / "SKILL.md"
+    pkg_skill = root / "src" / "engramkeep" / "data" / "SKILL.md"
+    if repo_skill.is_file() and pkg_skill.is_file():
+        if repo_skill.read_text(encoding="utf-8") != pkg_skill.read_text(encoding="utf-8"):
+            failures.append("skills/engramkeep/SKILL.md and src/engramkeep/data/SKILL.md diverged")
+
+    max_asset_bytes = 5 * 1024 * 1024
+    for asset_rel in ("assets/dashboard.png", "assets/demo.gif", "assets/social-preview.png"):
+        asset = root / asset_rel
+        if asset.is_file() and asset.stat().st_size > max_asset_bytes:
+            failures.append(f"asset exceeds 5 MiB budget: {asset_rel}")
+
+
 def run(root: Path) -> list[str]:
     failures: list[str] = []
     files = iter_files(root)
@@ -252,6 +282,7 @@ def run(root: Path) -> list[str]:
     check_symlinks(root, failures)
     check_text(root, files, failures)
     check_source_code(root, failures)
+    check_parity(root, failures)
     return failures
 
 

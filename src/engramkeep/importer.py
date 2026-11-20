@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Literal
 
@@ -19,6 +21,78 @@ from .paths import is_link_or_junction
 from .store import Store
 
 ImportFormat = Literal["auto", "claude-jsonl", "cursor", "opencode", "codex", "gemini", "text"]
+
+_DISCOVERY_SOURCES: tuple[tuple[str, str, tuple[str, ...]], ...] = (
+    ("claude-jsonl", ".claude/projects", ("*.jsonl",)),
+    ("codex", ".codex/sessions", ("*.jsonl",)),
+    ("opencode", ".local/share/opencode/storage/session", ("*.json", "*.jsonl")),
+    ("gemini", ".gemini/tmp", ("*.json",)),
+    ("cursor", ".cursor", ("*.json",)),
+)
+
+
+@dataclass(frozen=True)
+class DiscoveredTranscript:
+    """Metadata for a locally discovered agent transcript file (never read automatically)."""
+
+    agent: str
+    path: Path
+    size_bytes: int
+    modified: str
+
+    def to_dict(self) -> dict[str, object]:
+        """Return a JSON-serializable representation."""
+        return {
+            "agent": self.agent,
+            "path": str(self.path),
+            "size_bytes": self.size_bytes,
+            "modified": self.modified,
+        }
+
+
+def discover_transcripts(
+    *,
+    user_home: Path | None = None,
+    limit: int = 20,
+) -> list[DiscoveredTranscript]:
+    """List recent transcript files in standard agent directories (read-only metadata only)."""
+    limit = max(0, limit)
+    if limit == 0:
+        return []
+    base = (user_home if user_home is not None else Path.home()).expanduser().resolve()
+    found: list[tuple[float, DiscoveredTranscript]] = []
+
+    for agent, rel_dir, patterns in _DISCOVERY_SOURCES:
+        root = base / rel_dir
+        if not root.exists() or is_link_or_junction(root) or not root.is_dir():
+            continue
+        for pattern in patterns:
+            for candidate in root.rglob(pattern):
+                if is_link_or_junction(candidate) or not candidate.is_file():
+                    continue
+                try:
+                    st = candidate.stat()
+                except OSError:
+                    continue
+                if st.st_size == 0 or st.st_size > MAX_IMPORT_BYTES:
+                    continue
+                modified = datetime.fromtimestamp(st.st_mtime, tz=timezone.utc).strftime(
+                    "%Y-%m-%dT%H:%M:%SZ"
+                )
+                found.append(
+                    (
+                        st.st_mtime,
+                        DiscoveredTranscript(
+                            agent=agent,
+                            path=candidate,
+                            size_bytes=st.st_size,
+                            modified=modified,
+                        ),
+                    )
+                )
+
+    found.sort(key=lambda item: (item[0], str(item[1].path)), reverse=True)
+    return [entry for _, entry in found[:limit]]
 
 
 def _prompt_items(
@@ -130,10 +204,12 @@ def import_transcript(
 
 __all__ = [
     "MAX_IMPORT_BYTES",
+    "DiscoveredTranscript",
     "ImportFormat",
     "ImportResult",
     "ImportedDecision",
     "ImportedFix",
+    "discover_transcripts",
     "extract_candidates",
     "import_transcript",
 ]

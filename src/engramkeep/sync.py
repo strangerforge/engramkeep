@@ -106,6 +106,18 @@ def _run_git(home: Path, args: list[str]) -> subprocess.CompletedProcess[str]:
         raise StoreError(f"git command failed: {exc}") from exc
 
 
+def is_allowlisted_path(rel: str) -> bool:
+    """Return True when ``rel`` matches the strict sync allowlist (even if deleted)."""
+    normalized = rel.replace("\\", "/").lstrip("./")
+    if normalized in SYNC_ALLOWLIST_FILES or normalized == ".gitignore":
+        return True
+    prefix = f"{PROJECTS_DIR}/"
+    if normalized.startswith(prefix) and normalized.endswith(".md"):
+        rest = normalized[len(prefix) :]
+        return bool(rest) and "/" not in rest and ".." not in rest
+    return False
+
+
 def collect_allowlist(store: Store) -> list[str]:
     """Return relative POSIX paths of regular allowlisted files inside ``store``."""
     allowed: list[str] = []
@@ -168,15 +180,18 @@ def sync_status(store: Store) -> SyncStatus:
     store.require_initialized()
     report = store.doctor()
     allowlisted = collect_allowlist(store)
-    allow_set = set(allowlisted)
     is_repo = _is_git_repo(store.home)
 
     changed: list[str] = []
     excluded: list[str] = []
     if is_repo:
         for rel in _git_porcelain_paths(store.home):
-            if rel in allow_set:
-                changed.append(rel)
+            if is_allowlisted_path(rel):
+                target = store.home / Path(rel)
+                if not target.exists() or (target.is_file() and not is_link_or_junction(target)):
+                    changed.append(rel)
+                else:
+                    excluded.append(rel)
             else:
                 excluded.append(rel)
     return SyncStatus(
@@ -196,10 +211,11 @@ def sync_commit(
     message: str = "chore(engramkeep): sync allowlisted memory",
     apply: bool = False,
 ) -> SyncCommitResult:
-    """Stage allowlisted files and create a local Git commit (never pushes).
+    """Stage allowlisted files (including deletions) and create a local Git commit.
 
     Always runs ``store.doctor()`` first and refuses to commit if secrets,
     malformed cards, or audit-log tampering are detected. Dry-run by default.
+    Never runs ``git add -A`` or ``git push``.
     """
     status = sync_status(store)
     if not status.is_git_repo:
@@ -227,10 +243,18 @@ def sync_commit(
             message="dry run: pass --commit to stage allowlisted files and commit locally",
         )
 
+    existing = [rel for rel in candidates if (store.home / Path(rel)).exists()]
+    deleted = [rel for rel in candidates if not (store.home / Path(rel)).exists()]
+
     # Explicitly stage only allowlisted paths; never run git add -A.
-    add_proc = _run_git(store.home, ["add", "--", *candidates])
-    if add_proc.returncode != 0:
-        raise StoreError(f"git add failed: {add_proc.stderr.strip()}")
+    if existing:
+        add_proc = _run_git(store.home, ["add", "--", *existing])
+        if add_proc.returncode != 0:
+            raise StoreError(f"git add failed: {add_proc.stderr.strip()}")
+    if deleted:
+        rm_proc = _run_git(store.home, ["rm", "--cached", "--ignore-unmatch", "--", *deleted])
+        if rm_proc.returncode != 0:
+            raise StoreError(f"git rm failed: {rm_proc.stderr.strip()}")
 
     diff_check = _run_git(store.home, ["diff", "--cached", "--quiet"])
     if diff_check.returncode == 0:

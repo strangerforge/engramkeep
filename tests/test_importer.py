@@ -71,13 +71,13 @@ def test_import_text_apply_persists_decisions_and_fixes(tmp_path: Path) -> None:
         encoding="utf-8",
     )
     store = Store(tmp_path / "store")
-    result = import_transcript(store, log_file, project="niyaz", apply=True)
+    result = import_transcript(store, log_file, project="mobile-notes", apply=True)
     assert result.format == "text"
     assert result.applied is True
     assert result.written_decisions == 1
     assert result.written_fixes == 1
 
-    card = store.get_card("niyaz")
+    card = store.get_card("mobile-notes")
     assert card is not None
     assert "Yerel depolama için düz Markdown kullan" in card.body
     fix_hits = store.search_fixes("keystore alias")

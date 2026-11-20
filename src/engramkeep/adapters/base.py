@@ -138,7 +138,7 @@ def extract_candidates(
     seen_fixes: set[tuple[str, str]] = set()
     recent_error: tuple[int, str] | None = None
 
-    for line_no, raw_line in lines:
+    for seq_idx, (line_no, raw_line) in enumerate(lines):
         if len(decisions) + len(fixes) >= limit:
             break
         line = strip_control_chars(raw_line).strip()
@@ -160,11 +160,11 @@ def extract_candidates(
         if err_match:
             err_txt = clean_candidate(err_match.group(1), max_chars=240)
             if err_txt:
-                recent_error = (line_no, err_txt)
+                recent_error = (seq_idx, err_txt)
             continue
 
         fix_match = _FIX_LINE_RE.match(line) or _NATURAL_FIX_RE.match(line)
-        if fix_match and recent_error is not None and (line_no - recent_error[0]) <= 8:
+        if fix_match and recent_error is not None and (seq_idx - recent_error[0]) <= 12:
             err_txt = recent_error[1]
             fx_txt = clean_candidate(fix_match.group(1), max_chars=280)
             key = (err_txt.lower(), fx_txt.lower())
@@ -182,11 +182,13 @@ def extract_candidates(
                 decisions.append(ImportedDecision(text=dec_txt, source_line=line_no))
             continue
 
-        natural_match = _DECISION_NATURAL_RE.search(line)
-        if natural_match:
-            dec_txt = clean_candidate(natural_match.group(0).rstrip(".,;"), max_chars=240)
-            if dec_txt and dec_txt.lower() not in seen_decisions:
-                seen_decisions.add(dec_txt.lower())
-                decisions.append(ImportedDecision(text=dec_txt, source_line=line_no))
+        # Ignore questions ("Bundan sonra ne yapalım?", "Use X?") for natural matches.
+        if "?" not in line:
+            natural_match = _DECISION_NATURAL_RE.search(line)
+            if natural_match:
+                dec_txt = clean_candidate(natural_match.group(0).rstrip(".,;"), max_chars=240)
+                if dec_txt and dec_txt.lower() not in seen_decisions:
+                    seen_decisions.add(dec_txt.lower())
+                    decisions.append(ImportedDecision(text=dec_txt, source_line=line_no))
 
     return decisions, fixes

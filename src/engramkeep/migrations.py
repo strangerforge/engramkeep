@@ -270,6 +270,7 @@ def _restore_snapshot(home: Path, snapshot: Path) -> list[str]:
     if not isinstance(files, list) or not all(isinstance(item, str) for item in files):
         raise StoreError("backup manifest has invalid file list")
 
+    manifest_set = {Path(rel).as_posix() for rel in files}
     restored: list[str] = []
     for rel in files:
         parts = Path(rel).parts
@@ -279,6 +280,24 @@ def _restore_snapshot(home: Path, snapshot: Path) -> list[str]:
             continue
         atomic_write_text(dst, src.read_text(encoding="utf-8"), private_parent=True)
         restored.append(rel)
+
+    # Clean up managed top-level files and project cards created during a failed migration.
+    for top_name in _MANAGED_TOP_FILES:
+        if top_name not in manifest_set:
+            stray = safe_join(home, top_name)
+            if stray.is_file() and not is_link_or_junction(stray):
+                stray.unlink()
+    projects_dir = home / PROJECTS_DIR
+    if projects_dir.is_dir() and not is_link_or_junction(projects_dir):
+        for card_file in sorted(projects_dir.glob("*.md")):
+            rel_card = f"{PROJECTS_DIR}/{card_file.name}"
+            if (
+                rel_card not in manifest_set
+                and card_file.is_file()
+                and not is_link_or_junction(card_file)
+            ):
+                card_file.unlink()
+
     return restored
 
 
@@ -367,10 +386,20 @@ def migrate_store(
 
 
 def rollback_migration(home: Path | str, backup_dir: Path | str) -> RollbackResult:
-    """Restore a store from a previously created migration backup directory."""
+    """Restore a store from a migration backup located under ``<home>/backups/migrations/``."""
     resolved_home = Path(home).expanduser().resolve()
-    resolved_backup = Path(backup_dir).expanduser().resolve()
-    if not resolved_backup.is_dir() or is_link_or_junction(resolved_backup):
+    migrations_root = (resolved_home / "backups" / "migrations").resolve()
+    raw_backup = Path(backup_dir).expanduser()
+    if is_link_or_junction(raw_backup):
+        raise StoreError(f"refusing to roll back from symlinked backup: {backup_dir}")
+    resolved_backup = raw_backup.resolve()
+    try:
+        resolved_backup.relative_to(migrations_root)
+    except ValueError as exc:
+        raise StoreError(
+            f"backup directory must reside under {migrations_root}: {resolved_backup}"
+        ) from exc
+    if not resolved_backup.is_dir():
         raise StoreError(f"backup directory not found: {resolved_backup}")
     with file_lock(resolved_home / ".engramkeep.lock"):
         restored = _restore_snapshot(resolved_home, resolved_backup)

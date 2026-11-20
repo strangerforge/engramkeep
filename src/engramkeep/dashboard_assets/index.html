@@ -17,9 +17,11 @@
         <div>
           <h1>Engramkeep</h1>
           <p class="muted">Local-first project memory, served from 127.0.0.1.</p>
+          <p id="store-path" class="muted small-text"></p>
         </div>
       </div>
       <div class="header-actions">
+        <span id="layer-badge" class="badge" hidden></span>
         <button id="export-btn" type="button" class="secondary">Export JSON</button>
       </div>
     </div>
@@ -67,8 +69,13 @@
       <ul id="fixes-list" class="results"></ul>
     </section>
     <section aria-labelledby="doctor-heading">
-      <h2 id="doctor-heading">Doctor</h2>
+      <h2 id="doctor-heading">Doctor &amp; Audit Chain</h2>
+      <div id="doctor-badges" class="badge-row"></div>
       <pre id="doctor-view" class="pre"></pre>
+    </section>
+    <section aria-labelledby="trash-heading">
+      <h2 id="trash-heading">Trash (recoverable)</h2>
+      <ul id="trash-list" class="results"></ul>
     </section>
     <section id="remember-section" aria-labelledby="remember-heading" hidden>
       <h2 id="remember-heading">Remember a decision</h2>
@@ -78,7 +85,7 @@
                autocomplete="off">
         <label for="remember-decision">Decision</label>
         <textarea id="remember-decision" name="decision" required maxlength="4000"
-                  rows="5"></textarea>
+                  rows="4"></textarea>
         <label for="remember-tags">Tags (comma-separated)</label>
         <input id="remember-tags" name="tags" type="text" maxlength="400" autocomplete="off">
         <label class="checkbox">
@@ -86,6 +93,26 @@
           I confirm this is a durable decision.
         </label>
         <button type="submit">Remember</button>
+      </form>
+    </section>
+    <section id="supersede-section" aria-labelledby="supersede-heading" hidden>
+      <h2 id="supersede-heading">Supersede a decision</h2>
+      <form id="supersede-form">
+        <label for="sup-project">Project</label>
+        <input id="sup-project" name="project" type="text" required maxlength="128"
+               autocomplete="off">
+        <label for="sup-old">Old decision (exact or unique substring)</label>
+        <input id="sup-old" name="old_decision" type="text" required maxlength="4000"
+               autocomplete="off">
+        <label for="sup-new">New decision</label>
+        <textarea id="sup-new" name="new_decision" required maxlength="4000" rows="3"></textarea>
+        <label for="sup-reason">Reason (optional)</label>
+        <input id="sup-reason" name="reason" type="text" maxlength="500" autocomplete="off">
+        <label class="checkbox">
+          <input id="sup-confirm" type="checkbox" required>
+          I confirm replacing this decision while keeping ADR history.
+        </label>
+        <button type="submit">Supersede</button>
       </form>
     </section>
     <section id="fix-section" aria-labelledby="fix-heading" hidden>

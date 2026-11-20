@@ -29,3 +29,7 @@ class StoreError(EngramkeepError):
 
 class InstallerError(EngramkeepError):
     """Raised when an agent integration cannot be planned or applied."""
+
+
+class CryptoError(EngramkeepError):
+    """Raised when optional encryption/decryption fails or is unavailable."""

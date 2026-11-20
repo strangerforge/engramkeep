@@ -245,7 +245,14 @@ class ClaudeJsonlAdapter(TranscriptAdapter):
         if path.suffix.lower() == ".jsonl":
             return True
         obj = _first_json_object(raw_text)
-        return obj is not None
+        if obj is None:
+            return False
+        if isinstance(obj.get("message"), dict):
+            return True
+        rec_type = str(obj.get("type") or "").lower()
+        if rec_type in {"user", "assistant", "system", "summary"}:
+            return True
+        return "role" in obj and "content" in obj
 
     def extract_lines(self, raw_text: str) -> list[tuple[int, str]]:
         extracted: list[tuple[int, str]] = []

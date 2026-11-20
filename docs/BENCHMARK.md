@@ -10,8 +10,8 @@ bonus; there are no embeddings and no network calls.
 | Mean reciprocal rank | 0.978 |
 | Turkish query, English entry, top-1 | 15/15 (100.0%) |
 | Turkish query, English entry, top-3 | 15/15 (100.0%) |
-| Query latency p50 | 3.427 ms |
-| Query latency p95 | 8.962 ms |
+| Query latency p50 | 5.095 ms |
+| Query latency p95 | 9.841 ms |
 | No-match queries returning nothing | 2/3 |
 
 ## Per entry

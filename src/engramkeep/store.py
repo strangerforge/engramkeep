@@ -18,6 +18,7 @@ from .models import (
     Card,
     add_tags,
     append_decision,
+    merge_cards,
     new_card,
     normalize_tags,
     parse_card,
@@ -40,7 +41,7 @@ from .paths import (
     safe_join,
     strip_control_chars,
 )
-from .redact import contains_secret, redact_text
+from .redact import CustomRedactionRule, contains_secret, load_redaction_rules, redact_text
 from .search import SearchHit, search_cards
 from .troubleshoot import (
     MAX_ERROR_CHARS,
@@ -65,6 +66,8 @@ AUDIT_NAME = "audit.log"
 _TRASH_NAME_RE = re.compile(
     r"^(?P<id>[a-z0-9]+(?:-[a-z0-9]+)*)-(?P<stamp>\d{8}T\d{6}Z)(?:-\d+)?\.md$"
 )
+_ISO_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+_RECENT_TS_RE = re.compile(r"^- (\d{4}-\d{2}-\d{2})")
 
 
 @dataclass
@@ -161,6 +164,29 @@ class UntagResult:
         return {
             "card": self.card.to_dict(),
             "removed_tags": list(self.removed_tags),
+        }
+
+
+@dataclass
+class MergeResult:
+    """Result of merging one project card into another."""
+
+    source_id: str
+    target: Card
+    decisions_added: int
+    superseded_added: int
+    tags_added: list[str] = field(default_factory=list)
+    source_trashed: bool = False
+
+    def to_dict(self) -> dict[str, object]:
+        """Return a JSON-serializable representation."""
+        return {
+            "source_id": self.source_id,
+            "target": self.target.to_dict(),
+            "decisions_added": self.decisions_added,
+            "superseded_added": self.superseded_added,
+            "tags_added": list(self.tags_added),
+            "source_trashed": self.source_trashed,
         }
 
 
@@ -403,6 +429,9 @@ class Store:
         cards.sort(key=lambda card: (card.updated, card.title.lower()), reverse=True)
         return cards
 
+    def _redaction_rules(self) -> tuple[CustomRedactionRule, ...]:
+        return load_redaction_rules(self.home)
+
     def remember(
         self,
         project: str,
@@ -417,7 +446,7 @@ class Store:
         if len(raw_decision) > 262_144:
             raise ValidationError("decision exceeds maximum input size")
         sanitized = " ".join(strip_control_chars(raw_decision).split())
-        cleaned = redact_text(sanitized)
+        cleaned = redact_text(sanitized, extra_rules=self._redaction_rules())
         normalized_tags = normalize_tags(tags)
 
         with self._write_lock():
@@ -605,9 +634,10 @@ class Store:
         raw_new = str(new_decision)
         if len(raw_new) > 262_144:
             raise ValidationError("decision exceeds maximum input size")
-        clean_new = redact_text(" ".join(strip_control_chars(raw_new).split()))
+        rules = self._redaction_rules()
+        clean_new = redact_text(" ".join(strip_control_chars(raw_new).split()), extra_rules=rules)
         clean_reason = (
-            redact_text(" ".join(strip_control_chars(str(reason)).split()))
+            redact_text(" ".join(strip_control_chars(str(reason)).split()), extra_rules=rules)
             if reason is not None and str(reason).strip()
             else None
         )
@@ -680,6 +710,59 @@ class Store:
             self._audit("remove_decision", card.id, {"removed": True})
             return card, removed_text
 
+    def merge(
+        self,
+        source_project: str,
+        target_project: str,
+        *,
+        delete_source: bool = False,
+    ) -> MergeResult:
+        """Merge decisions, superseded history, and tags from ``source`` into ``target``."""
+        self.require_initialized()
+        src_id = normalize_project_id(source_project)
+        dst_id = normalize_project_id(target_project)
+        if src_id == dst_id:
+            raise ValidationError("source and target projects must be different")
+
+        with self._write_lock():
+            source_card = self.get_card(src_id)
+            if source_card is None:
+                raise StoreError(f"source project not found: {source_project}")
+            target_card = self.get_card(dst_id)
+            if target_card is None:
+                target_card = new_card(dst_id)
+
+            merged, dec_added, sup_added, tags_added = merge_cards(source_card, target_card)
+            self.save_card(merged)
+            source_trashed = False
+            if delete_source:
+                source_trashed = self.forget(src_id)
+            self._write_index(self.scan_cards().cards)
+            self._append_recent(
+                f"merged **{source_card.title}** (`{src_id}`) into **{merged.title}** (`{dst_id}`)",
+                dst_id,
+                merged.tags,
+            )
+            self._audit(
+                "merge",
+                dst_id,
+                {
+                    "source": src_id,
+                    "decisions_added": dec_added,
+                    "superseded_added": sup_added,
+                    "tags_added": tags_added,
+                    "source_trashed": source_trashed,
+                },
+            )
+            return MergeResult(
+                source_id=src_id,
+                target=merged,
+                decisions_added=dec_added,
+                superseded_added=sup_added,
+                tags_added=tags_added,
+                source_trashed=source_trashed,
+            )
+
     def reindex(self) -> ScanResult:
         """Regenerate INDEX.md from the valid cards."""
         self.require_initialized()
@@ -689,9 +772,15 @@ class Store:
             self._audit("reindex", None, {"cards": len(scan.cards), "errors": len(scan.errors)})
             return scan
 
-    def recent(self, limit: int = 10) -> list[str]:
-        """Return recent activity bullets, newest first."""
+    def recent(self, limit: int = 10, *, since: str | None = None) -> list[str]:
+        """Return recent activity bullets, newest first, optionally filtered by ``since``."""
         self.require_initialized()
+        since_date: str | None = None
+        if since is not None and since.strip():
+            candidate = since.strip()
+            if not _ISO_DATE_RE.match(candidate):
+                raise ValidationError(f"invalid --since date {since!r}; expected YYYY-MM-DD")
+            since_date = candidate
         if limit <= 0 or not self.recent_path.exists():
             return []
         if is_link_or_junction(self.recent_path):
@@ -703,6 +792,13 @@ class Store:
         except (OSError, UnicodeDecodeError) as exc:
             raise StoreError(f"cannot read {self.recent_path.name}: {exc}") from exc
         bullets = [line for line in lines if line.startswith("- ")]
+        if since_date is not None:
+            filtered: list[str] = []
+            for bullet in bullets:
+                match = _RECENT_TS_RE.match(bullet)
+                if match and match.group(1) >= since_date:
+                    filtered.append(bullet)
+            bullets = filtered
         return list(reversed(bullets[-limit:]))
 
     def _read_troubleshooting(self) -> list[TroubleEntry]:
@@ -735,19 +831,28 @@ class Store:
         ``(project, error, fix)`` entry already exists in ``TROUBLESHOOTING.md``.
         """
         self.require_initialized()
+        rules = self._redaction_rules()
         try:
             clean_error = redact_text(
-                normalize_field(error, max_chars=MAX_ERROR_CHARS, name="error")
+                normalize_field(error, max_chars=MAX_ERROR_CHARS, name="error"),
+                extra_rules=rules,
             )
-            clean_fix = redact_text(normalize_field(fix, max_chars=MAX_FIX_CHARS, name="fix"))
+            clean_fix = redact_text(
+                normalize_field(fix, max_chars=MAX_FIX_CHARS, name="fix"),
+                extra_rules=rules,
+            )
             clean_project = (
-                redact_text(normalize_field(project, max_chars=MAX_PROJECT_CHARS, name="project"))
+                redact_text(
+                    normalize_field(project, max_chars=MAX_PROJECT_CHARS, name="project"),
+                    extra_rules=rules,
+                )
                 if project is not None and str(project).strip()
                 else "General"
             )
             clean_workspace = (
                 redact_text(
-                    normalize_field(workspace, max_chars=MAX_WORKSPACE_CHARS, name="workspace")
+                    normalize_field(workspace, max_chars=MAX_WORKSPACE_CHARS, name="workspace"),
+                    extra_rules=rules,
                 )
                 if workspace is not None and str(workspace).strip()
                 else None
@@ -883,15 +988,32 @@ class Store:
         elif audit_check.status == "legacy":
             report.warnings.append(audit_check.message)
 
+        try:
+            rules = self._redaction_rules()
+        except ValidationError as exc:
+            report.errors.append(str(exc))
+            rules = ()
+
         scan = self.scan_cards()
         report.cards = len(scan.cards)
         report.malformed = list(scan.errors)
+        titles_seen: dict[str, list[str]] = {}
         for card in scan.cards:
-            if contains_secret(render_card(card)):
+            if contains_secret(render_card(card), extra_rules=rules):
                 report.unredacted.append(card.id)
+            key = card.title.strip().lower()
+            titles_seen.setdefault(key, []).append(card.id)
+        for ids in titles_seen.values():
+            if len(ids) > 1:
+                report.warnings.append(
+                    f"duplicate card title shared by projects: {', '.join(sorted(ids))}"
+                )
         try:
             for entry in self._read_troubleshooting():
-                if contains_secret(f"{entry.error}\n{entry.fix}\n{entry.workspace or ''}"):
+                if contains_secret(
+                    f"{entry.error}\n{entry.fix}\n{entry.workspace or ''}",
+                    extra_rules=rules,
+                ):
                     report.unredacted.append(f"fix:{entry.project}")
         except StoreError as exc:
             report.errors.append(str(exc))
@@ -1101,11 +1223,12 @@ class LayeredStore:
         query: str,
         *,
         tag: str | None = None,
+        tags: Iterable[str] | None = None,
         limit: int = 10,
     ) -> tuple[list[SearchHit], list[str]]:
         """Search cards across all active layers and annotate hits with ``source``."""
         cards, sources, errors = self.scan_cards()
-        hits = search_cards(cards, query, tag=tag, limit=limit)
+        hits = search_cards(cards, query, tag=tag, tags=tags, limit=limit)
         if not self.is_layered:
             return hits, errors
         annotated = [
@@ -1143,3 +1266,15 @@ class LayeredStore:
             )
             for hit in hits
         ]
+
+    def merged_troubleshooting_markdown(self) -> str:
+        """Render the deduplicated troubleshooting registry across active layers."""
+        entries: list[TroubleEntry] = []
+        seen: set[tuple[str, str, str]] = set()
+        for _, layer in self._active_layers():
+            for entry in layer._read_troubleshooting():
+                key = entry.dedup_key()
+                if key not in seen:
+                    seen.add(key)
+                    entries.append(entry)
+        return render_registry(entries)

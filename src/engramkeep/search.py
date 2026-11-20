@@ -129,14 +129,25 @@ def search_cards(
     query: str,
     *,
     tag: str | None = None,
+    tags: Iterable[str] | None = None,
     limit: int = 10,
 ) -> list[SearchHit]:
     """Search titles, ids, tags, and bodies using BM25, phrase match, and EN/TR expansion."""
     limit = max(0, limit)
-    tag_filter = normalize_tag(tag) if tag else None
+    required_tags: list[str] = []
+    if tag:
+        required_tags.append(normalize_tag(tag))
+    if tags:
+        for item in tags:
+            if item:
+                norm_tag = normalize_tag(item)
+                if norm_tag not in required_tags:
+                    required_tags.append(norm_tag)
+
     candidates: list[Card] = []
     for card in cards:
-        if tag_filter and tag_filter not in [item.lower() for item in card.tags]:
+        card_tag_set = {item.lower() for item in card.tags}
+        if required_tags and not all(req in card_tag_set for req in required_tags):
             continue
         candidates.append(card)
 

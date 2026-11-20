@@ -345,7 +345,6 @@ def test_installer_extended_mcp_allow_write_portable_cmd_and_skill(
         ("windsurf", ".windsurf/mcp.json"),
         ("gemini-cli", ".gemini/settings.json"),
         ("antigravity", ".gemini/mcp.json"),
-        ("codex", ".codex/mcp.json"),
         ("cline", ".cline/mcp_settings.json"),
         ("roo", ".roo/mcp.json"),
     ):
@@ -367,6 +366,26 @@ def test_installer_extended_mcp_allow_write_portable_cmd_and_skill(
         assert entry["command"] == "engramkeep"
         assert entry["args"] == ["mcp", "--allow-write"]
         assert any("SKILL.md" in op.target for op in result.operations)
+
+    # Codex writes MCP config as a managed TOML block in .codex/config.toml
+    codex_result = install_agents(
+        "codex",
+        user_home=tmp_path / "home",
+        project_dir=tmp_path / "project",
+        backup_root=tmp_path / "backups",
+        scope="project",
+        mcp=True,
+        mcp_allow_write=True,
+        skill=True,
+        dry_run=False,
+    )
+    codex_toml = tmp_path / "project" / ".codex" / "config.toml"
+    assert codex_toml.is_file()
+    codex_text = codex_toml.read_text(encoding="utf-8")
+    assert "[mcp_servers.engramkeep]" in codex_text
+    assert 'command = "engramkeep"' in codex_text
+    assert 'args = ["mcp", "--allow-write"]' in codex_text
+    assert any("SKILL.md" in op.target for op in codex_result.operations)
 
     # Uninstall with --skill removes SKILL.md cleanly
     skill_path = tmp_path / "project" / ".gemini" / "skills" / "engramkeep" / "SKILL.md"

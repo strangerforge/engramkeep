@@ -15,8 +15,10 @@ from typing import Any, BinaryIO, TextIO
 
 from . import __version__
 from .config import resolve_home
+from .context import DEFAULT_MAX_CHARS, MAX_MAX_CHARS, MIN_MAX_CHARS, pack_context
 from .errors import EngramkeepError
 from .models import normalize_tag, render_card
+from .paths import is_link_or_junction
 from .search import search_cards
 from .store import LayeredStore, Store
 
@@ -64,9 +66,13 @@ class UnknownToolError(Exception):
     """A tool name that is not exposed by this server."""
 
 
-def status() -> dict[str, str]:
+def status(
+    home: Path | str | None = None,
+    *,
+    project_home: Path | str | None = None,
+) -> dict[str, str]:
     """Return machine-readable server status."""
-    return {
+    info: dict[str, str] = {
         "component": "mcp",
         "status": "available",
         "transport": "stdio",
@@ -75,6 +81,11 @@ def status() -> dict[str, str]:
         "capabilities": "tools, resources, prompts",
         "writes": "disabled unless --allow-write is passed",
     }
+    if home is not None:
+        info["home"] = str(Path(home).expanduser().resolve())
+    if project_home is not None:
+        info["project_home"] = str(Path(project_home).expanduser().resolve())
+    return info
 
 
 def _tool_definitions(*, allow_write: bool) -> list[dict[str, Any]]:
@@ -168,6 +179,35 @@ def _tool_definitions(*, allow_write: bool) -> list[dict[str, Any]]:
                         "default": DEFAULT_LIMIT,
                     },
                 },
+                "additionalProperties": False,
+            },
+            "annotations": READ_ONLY_ANNOTATIONS,
+        },
+        {
+            "name": "engramkeep_context",
+            "description": (
+                "Pack the most relevant project cards and verified fixes into a single "
+                "character-budgeted Markdown context block. Read-only."
+            ),
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Topic, keywords, or project id."},
+                    "project": {"type": "string", "description": "Optional priority project id."},
+                    "tags": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "maxItems": MAX_TAGS,
+                        "description": "Optional tag filters (AND).",
+                    },
+                    "max_chars": {
+                        "type": "integer",
+                        "minimum": MIN_MAX_CHARS,
+                        "maximum": MAX_MAX_CHARS,
+                        "default": DEFAULT_MAX_CHARS,
+                    },
+                },
+                "required": ["query"],
                 "additionalProperties": False,
             },
             "annotations": READ_ONLY_ANNOTATIONS,
@@ -585,19 +625,27 @@ class McpServer:
         try:
             if target == "index":
                 self.store.require_initialized()
+                if is_link_or_junction(self.store.index_path):
+                    return self._error(request_id, -32602, "refusing symlinked index resource")
                 text = (
                     self.store.index_path.read_text(encoding="utf-8")
-                    if self.store.index_path.is_file() and not self.store.index_path.is_symlink()
+                    if self.store.index_path.is_file()
                     else ""
                 )
             elif target == "troubleshooting":
-                self.store.require_initialized()
-                text = (
-                    self.store.troubleshooting_path.read_text(encoding="utf-8")
-                    if self.store.troubleshooting_path.is_file()
-                    and not self.store.troubleshooting_path.is_symlink()
-                    else ""
-                )
+                if self.layered.is_layered:
+                    text = self.layered.merged_troubleshooting_markdown()
+                else:
+                    self.store.require_initialized()
+                    if is_link_or_junction(self.store.troubleshooting_path):
+                        return self._error(
+                            request_id, -32602, "refusing symlinked troubleshooting resource"
+                        )
+                    text = (
+                        self.store.troubleshooting_path.read_text(encoding="utf-8")
+                        if self.store.troubleshooting_path.is_file()
+                        else ""
+                    )
             elif target == "recent":
                 entries = self.store.recent(50)
                 text = "# Recent Activity\n\n" + "\n".join(entries) + ("\n" if entries else "")
@@ -721,6 +769,7 @@ class McpServer:
             "engramkeep_show",
             "engramkeep_recent",
             "engramkeep_fixes",
+            "engramkeep_context",
         }:
             result = {
                 "_untrusted_data_notice": (
@@ -757,6 +806,8 @@ class McpServer:
             return self._tool_doctor(arguments)
         if name == "engramkeep_fixes":
             return self._tool_fixes(arguments)
+        if name == "engramkeep_context":
+            return self._tool_context(arguments)
         if name == "engramkeep_record_fix":
             if not self.allow_write:
                 raise UnknownToolError(
@@ -866,6 +917,28 @@ class McpServer:
         return {
             "fixes": [hit.to_dict() for hit in hits],
         }
+
+    def _tool_context(self, arguments: dict[str, Any]) -> dict[str, Any]:
+        _check_arguments(arguments, {"query", "project", "tags", "max_chars"})
+        query = _string_argument(arguments, "query", max_length=MAX_QUERY_CHARS)
+        project = _string_argument(arguments, "project", required=False, max_length=128)
+        tags = _tags_argument(arguments)
+        max_chars = _integer_argument(
+            arguments,
+            "max_chars",
+            default=DEFAULT_MAX_CHARS,
+            minimum=MIN_MAX_CHARS,
+            maximum=MAX_MAX_CHARS,
+        )
+        assert query is not None
+        bundle = pack_context(
+            self.layered if self.layered.is_layered else self.store,
+            query,
+            project=project,
+            tags=tags or None,
+            max_chars=max_chars,
+        )
+        return bundle.to_dict()
 
     def _tool_record_fix(self, arguments: dict[str, Any]) -> dict[str, Any]:
         _check_arguments(arguments, {"error_message", "solution", "project", "workspace"})

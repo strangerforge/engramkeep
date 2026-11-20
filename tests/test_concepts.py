@@ -41,8 +41,8 @@ def test_concept_map_has_no_project_specific_terms() -> None:
     flattened = " ".join(
         term for primary, related in SEMANTIC_CONCEPTS.items() for term in (primary, *related)
     )
-    for personal in ("uçak", "bilet", "n8n", "sahibinden", "dizifilmbul", "niyaz"):
-        assert personal not in flattened
+    for project_specific in ("acme-billing", "northwind", "contoso", "internal-crm", "demo-shop"):
+        assert project_specific not in flattened
 
 
 def test_expansion_is_deterministic() -> None:

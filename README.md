@@ -26,13 +26,17 @@ Windsurf, Gemini CLI, Antigravity, or anything that can read `AGENTS.md` — the
 same persistent, human-readable project memory. It runs on the Python standard
 library alone.
 
-> **Status: 1.0.0 stable.** Local-first Markdown store, layered project
-> (`.engramkeep/`) + global memory, ADR decision lifecycle (`supersede`,
-> `untag`, `trash`/`restore`), BM25 + quoted phrase + Turkish-aware bilingual
-> search, tamper-evident SHA-256 hash-chained `audit.log`, schema migrations
-> (`migrate`), doctor-gated allowlist Git sync (`sync`), multi-agent transcript
-> adapters (`import --interactive`), MCP tools/resources/prompts, modular
-> loopback dashboard, and the backed-up 10-agent installer (`--mcp`, `--skill`).
+> **Status: 1.2.0 stable.** Local-first Markdown store, budget-bounded
+> `context` packer (`engramkeep context` & MCP `engramkeep_context`), layered
+> project (`.engramkeep/`) + global memory across CLI/MCP/dashboard, ADR
+> decision lifecycle (`supersede`, `untag`, `merge`, `trash`/`restore`),
+> BM25 + quoted phrase + multi-tag AND + Turkish-aware bilingual search,
+> tamper-evident SHA-256 hash-chained `audit.log`, custom `<home>/redact.json`
+> rules + user-path redaction, optional at-rest encryption (`engramkeep[crypto]`),
+> schema migrations (`migrate`), doctor-gated allowlist Git sync (`sync`),
+> multi-agent transcript discovery & import (`import --discover` / `--interactive`),
+> MCP tools/resources/prompts, modular loopback dashboard, and the backed-up
+> 10-agent installer (9 MCP configs incl. Codex TOML, `--skill`, `--restore`).
 > See [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ---
@@ -60,24 +64,26 @@ own.
 
 ---
 
-## What works in 1.0.0
+## What works in 1.2.0
 
 | Area | Status |
 | --- | --- |
 | Markdown store + generated index + `py.typed` | Working |
-| Layered memory (`.engramkeep/` project store + global overlay) | Working |
-| Decision lifecycle (`remember`, `supersede`, `untag`, `forget --decision`, `trash`, `restore`) | Working |
+| Budget-bounded context packer (`engramkeep context`, MCP `engramkeep_context`) | Working |
+| Layered memory (`.engramkeep/` project store + global overlay across CLI, MCP, dashboard) | Working |
+| Decision lifecycle (`remember`, `supersede`, `untag`, `merge`, `forget --decision`, `trash`, `restore`) | Working |
 | Deduplicated troubleshooting registry (`fix`, `fixes`, `TROUBLESHOOTING.md`) | Working |
-| BM25 + quoted phrase + Turkish-aware & bilingual (EN/TR) search | Working |
-| Multi-agent transcript adapters (`claude-jsonl`, `cursor`, `opencode`, `codex`, `gemini`, `text`) + `import --interactive` | Working |
-| Tamper-evident SHA-256 hash-chained `audit.log` + `doctor --fix` | Working |
-| Schema migrations (`migrate --apply`, automatic backup & `--rollback`) | Working |
-| Safe allowlist local Git sync (`sync`, doctor-gated, no auto-push) | Working |
-| MCP stdio server (multi-version negotiation, tools, resources, prompts) | Working |
-| Modular web dashboard (`--open`, `POST /api/fixes`, `GET /api/export`, tag filters, text-only Markdown) | Working |
-| Agent installer (10 agents, 9 MCP configs, `--mcp-allow-write`, `--skill`) | Working |
-| Shell completion (`bash`, `zsh`, `fish`, `powershell`) | Working |
-| Secret redaction, path jail, atomic writes, advisory file locks | Working |
+| BM25 + quoted phrase + multi-tag AND + Turkish-aware & bilingual (EN/TR) search | Working |
+| Multi-agent transcript adapters (`claude-jsonl`, `cursor`, `opencode`, `codex`, `gemini`, `text`) + `--discover` + `--interactive` | Working |
+| Tamper-evident SHA-256 hash-chained `audit.log` + `doctor --fix` (incl. duplicate-title check) | Working |
+| Schema migrations (`migrate --apply`, jail-checked `--rollback`, stray-file cleanup) | Working |
+| Safe allowlist local Git sync (`sync`, tracked deletions, doctor-gated, no auto-push) | Working |
+| MCP stdio server (multi-version negotiation, layered reads, tools, resources, prompts) | Working |
+| Modular web dashboard (store path & layered badges, Doctor/Audit, Trash+Restore, Supersede, Fixes, export, `--open`) | Working |
+| Agent installer (10 agents, 9 MCP configs incl. Codex TOML, `--mcp-allow-write`, `--mcp-command`, `--skill`, `--restore`) | Working |
+| Modern AI/SaaS secret + user-path redaction + ReDoS-guarded `<home>/redact.json` | Working |
+| Optional at-rest AEAD encryption (`engramkeep encrypt`/`decrypt` via `engramkeep[crypto]`) | Working |
+| Shell completion (`bash`, `zsh`, `fish`, `powershell`) & CLI exit codes (`docs/EXIT_CODES.md`) | Working |
 
 ---
 
@@ -169,8 +175,10 @@ It is a **dry run by default**: nothing changes until you pass `--apply`.
 engramkeep install --list                 # supported agents
 engramkeep install --agent opencode       # show the plan (dry run)
 engramkeep install --agent opencode --apply
-engramkeep install --agent opencode --apply --mcp
-engramkeep install --agent all --apply    # every supported agent
+engramkeep install --agent opencode --apply --mcp --skill
+engramkeep install --agent codex --apply --mcp
+engramkeep install --agent all --apply    # every supported agent (shared targets deduped)
+engramkeep install --restore <run-id> --apply
 engramkeep install --agent opencode --uninstall
 ```
 
@@ -178,12 +186,13 @@ What it does:
 
 | Behavior | Detail |
 | --- | --- |
-| Managed blocks | Text is wrapped in `<!-- engramkeep:begin -->` … `<!-- engramkeep:end -->`; re-running updates only that block |
-| Backups | Every modified file is copied to `<home>/backups/installer/<run>/` with a content hash, and the path is recorded in `manifest.json` |
+| Managed blocks | Markdown rules use `<!-- engramkeep:begin -->` … `<!-- engramkeep:end -->`; Codex TOML MCP uses `# engramkeep:mcp:begin` … `# engramkeep:mcp:end`; re-running updates only that block |
+| Backups & restore | Every modified file is copied to `<home>/backups/installer/<run>/` with a SHA-256 hash recorded in `manifest.json`; restore any run with `engramkeep install --restore <run> --apply` |
 | Scopes | `--scope auto` (default; global when documented, otherwise project) or `--scope project --project-dir PATH` |
-| MCP registration | Opt-in with `--mcp`; automatic for Claude Code, OpenCode, and Cursor, skipped with a printed reason elsewhere |
-| Uninstall | `--uninstall` removes only the managed block and leaves the rest of the file intact |
-| Dry run | Prints `would-create`, `would-update`, or `would-remove` for every target |
+| MCP registration | Opt-in with `--mcp` across 9 agents (JSON configs + OpenAI Codex `config.toml`; read-only by default, add `--mcp-allow-write` for writes, `--mcp-command` to pin a binary). Skips ephemeral `.venv` paths automatically |
+| Skill installation | Opt-in with `--skill` installs the bundled `SKILL.md` into the agent's skills directory |
+| Uninstall | `--uninstall` removes only the managed block (and skill/MCP entry when passed) and leaves the rest of the file intact |
+| Dry run | Default (or explicit `--dry-run`): prints `would-create`, `would-update`, `would-remove`, or `shared` for every target |
 | No overwrites | Refuses to edit files it cannot parse safely; never deletes user content |
 
 Supported agents: **OpenCode, Claude Code, OpenAI Codex, Cursor, Windsurf,
@@ -212,14 +221,17 @@ engramkeep --home ./my-brain init
 Layout:
 
 ```text
-<home>/
-├── INDEX.md              # generated project index
-├── RECENT_ACTIVITY.md    # human-readable activity log
-├── TROUBLESHOOTING.md    # resolved errors and verified fixes
-├── audit.log             # append-only JSONL audit trail
+<home>/   (or <repo>/.engramkeep/ for project-scoped layered memory)
+├── meta.json              # schema version and migration metadata
+├── redact.json            # optional custom ReDoS-guarded redaction rules
+├── INDEX.md               # generated project index
+├── RECENT_ACTIVITY.md     # human-readable activity log
+├── TROUBLESHOOTING.md     # deduplicated resolved errors and verified fixes
+├── audit.log              # append-only SHA-256 hash-chained JSONL audit trail
 ├── projects/
 │   └── example-project.md
-└── trash/                # recoverable cards moved by `forget`
+├── trash/                 # recoverable cards moved by `forget`
+└── backups/               # timestamped backups for installer, doctor, migrate, crypto
 ```
 
 A project card is Markdown with a small frontmatter block:
@@ -297,28 +309,34 @@ python scripts/benchmark_fix_registry.py --output docs/BENCHMARK.md
 | --- | --- |
 | `engramkeep init [--local]` | Create the global or project-local `.engramkeep/` store |
 | `engramkeep remember <project> "<decision>" [--tag TAG] [--local]` | Record a durable decision |
-| `engramkeep supersede <project> --old "..." --new "..." [--reason "..."]` | Replace a decision while keeping ADR history |
-| `engramkeep untag <project> --tag TAG` | Remove one or more tags from a project card |
-| `engramkeep search "<query>" [--tag TAG] [--project-store DIR] [--no-local] [--json]` | Search with BM25, phrases, and EN/TR + Turkish suffix matching |
-| `engramkeep show <project>` | Print a project card |
-| `engramkeep list` | List known projects (layered when `.engramkeep/` is present) |
-| `engramkeep recent` | Print recent activity |
-| `engramkeep forget <project> [--decision "..."] --yes` | Move a card to `trash/` or remove one decision |
-| `engramkeep trash [--purge --yes]` | List or purge trashed cards |
-| `engramkeep restore <project> [--file NAME] [--force]` | Restore a trashed card back to `projects/` |
+| `engramkeep supersede <project> --old "..." --new "..." [--reason "..."] [--local]` | Replace a decision while keeping ADR history |
+| `engramkeep untag <project> --tag TAG [--local]` | Remove one or more tags from a project card |
+| `engramkeep merge <source> <target> [--delete-source] [--local]` | Merge decisions, ADR history, and tags from one card into another |
+| `engramkeep context [query] [--project ID] [--tag TAG ...] [--max-chars N] [--json]` | Pack a budget-bounded, untrusted-data-framed context brief for an agent |
+| `engramkeep search "<query>" [--tag TAG ...] [--project-store DIR] [--no-local] [--json]` | Search with BM25, phrases, multi-tag AND, and EN/TR + Turkish suffix matching |
+| `engramkeep show <project> [--json]` | Print a project card |
+| `engramkeep list [--json]` | List known projects (layered when `.engramkeep/` is present) |
+| `engramkeep recent [--limit N] [--since YYYY-MM-DD] [--local]` | Print recent activity, optionally filtered by date |
+| `engramkeep forget <project> [--decision "..."] --yes [--local]` | Move a card to `trash/` or remove one decision |
+| `engramkeep trash [--purge --yes] [--local]` | List or purge trashed cards |
+| `engramkeep restore <project> [--file NAME] [--force] [--local]` | Restore a trashed card back to `projects/` |
 | `engramkeep fix "<error>" --solution "<fix>" [--project NAME] [--workspace PATH] [--local]` | Record a deduplicated resolved problem |
 | `engramkeep fixes [query] [--limit N] [--json]` | Search the troubleshooting registry |
-| `engramkeep import --file PATH [--format auto\|claude-jsonl\|cursor\|opencode\|codex\|gemini\|text] [--apply\|--interactive]` | Preview or import redacted candidates from agent transcripts |
-| `engramkeep export [--output FILE]` | Export all cards and fixes as JSON |
-| `engramkeep reindex` | Regenerate `INDEX.md` |
-| `engramkeep doctor [--fix] [--json]` | Verify store health & SHA-256 audit chain, or safely repair |
-| `engramkeep migrate [--apply \| --rollback DIR]` | Plan, apply, or roll back schema migrations & audit sealing |
-| `engramkeep sync [--init \| --status \| --commit [-m MSG]]` | Doctor-gated allowlist local Git sync (never auto-pushes) |
+| `engramkeep import --discover \| --file PATH [--format auto\|claude-jsonl\|cursor\|opencode\|codex\|gemini\|text] [--apply\|--interactive] [--local]` | Discover local transcripts or preview/import redacted candidates |
+| `engramkeep export [--output FILE] [--force] [--local]` | Export all cards and fixes as JSON |
+| `engramkeep reindex [--local]` | Regenerate `INDEX.md` |
+| `engramkeep doctor [--fix] [--json] [--local]` | Verify store health, duplicate titles, & SHA-256 audit chain, or safely repair |
+| `engramkeep migrate [--apply \| --rollback DIR] [--local]` | Plan, apply, or roll back schema migrations & audit sealing |
+| `engramkeep sync [--init \| --status \| --commit [-m MSG]] [--local]` | Doctor-gated allowlist local Git sync including tracked deletions (never auto-pushes) |
+| `engramkeep encrypt [--apply] [--local]` | Opt-in AES-256-GCM at-rest encryption (requires `engramkeep[crypto]`) |
+| `engramkeep decrypt [--apply] [--local]` | Decrypt an encrypted store (requires `engramkeep[crypto]`) |
 | `engramkeep path [--local]` | Print the active memory directory |
 | `engramkeep completion <bash\|zsh\|fish\|powershell>` | Print shell completion script |
-| `engramkeep install [--list] [--agent NAME] [--apply] [--uninstall] [--mcp] [--mcp-allow-write] [--skill]` | Plan or apply agent integration, MCP config, and `SKILL.md` |
-| `engramkeep mcp [--status] [--allow-write]` | Run the MCP stdio server (tools, resources, prompts) |
-| `engramkeep dashboard [--status] [--port PORT] [--allow-write] [--open]` | Run the local dashboard (optionally opening the browser) |
+| `engramkeep install [--list] [--agent NAME] [--dry-run] [--apply] [--uninstall] [--restore RUN] [--mcp] [--mcp-allow-write] [--mcp-command CMD] [--skill]` | Plan, apply, restore, or remove agent integration, MCP config, and `SKILL.md` |
+| `engramkeep mcp [--status] [--allow-write] [--project-store DIR \| --no-local]` | Run the layered MCP stdio server (tools, resources, prompts) |
+| `engramkeep dashboard [--status] [--port PORT] [--allow-write] [--open] [--project-store DIR \| --no-local]` | Run the layered local dashboard (optionally opening the browser) |
+
+See [docs/EXIT_CODES.md](docs/EXIT_CODES.md) for deterministic CLI exit codes.
 
 ---
 
@@ -335,15 +353,16 @@ The repository ships:
 - [`templates/agents/AGENTS.md`](templates/agents/AGENTS.md)
 - [`templates/rules/`](templates/rules/) for Claude Code, Cursor, Windsurf, and OpenCode
 
-`engramkeep install --agent <name> --apply` installs the managed instruction
-block (and optional MCP config with `--mcp`). Copy [`skills/engramkeep/SKILL.md`](skills/engramkeep/SKILL.md)
-or rule templates manually if you want the full skill file:
+`engramkeep install --agent <name> --apply --mcp --skill` installs the managed
+instruction block, MCP server entry, and bundled `SKILL.md` in one backed-up
+command (manual copying from [`skills/engramkeep/SKILL.md`](skills/engramkeep/SKILL.md)
+and [`templates/`](templates/) also works):
 
 | Agent | Typical target |
 | --- | --- |
 | OpenCode | `~/.config/opencode/AGENTS.md` and `~/.config/opencode/skills/engramkeep/SKILL.md` |
 | Claude Code | `~/.claude/CLAUDE.md` and `~/.claude/skills/engramkeep/SKILL.md` |
-| Codex | `~/.codex/AGENTS.md` or a project `AGENTS.md` |
+| Codex | `~/.codex/AGENTS.md` and `~/.codex/config.toml` (TOML MCP block) |
 | Cursor | `.cursor/rules/engramkeep.mdc` or `AGENTS.md` |
 | Windsurf | `.windsurf/rules/engramkeep.md` or `AGENTS.md` |
 | Gemini CLI / Antigravity | `GEMINI.md` or `AGENTS.md` |
@@ -357,8 +376,10 @@ Start the server with:
 engramkeep mcp
 ```
 
-It uses newline-delimited JSON-RPC 2.0 over stdio and protocol version
-`2025-11-25`. A typical client configuration looks like:
+It uses newline-delimited JSON-RPC 2.0 over stdio, negotiates protocol versions
+`2024-11-05` through `2025-11-25`, and automatically layers any repo-local
+`.engramkeep/` store over the global home (override with `--project-store DIR`
+or `--no-local`). A typical client configuration looks like:
 
 ```json
 {
@@ -371,10 +392,14 @@ It uses newline-delimited JSON-RPC 2.0 over stdio and protocol version
 }
 ```
 
-The default tool set is read-only: `engramkeep_search`, `engramkeep_show`,
-`engramkeep_list`, `engramkeep_recent`, `engramkeep_doctor`, and
-`engramkeep_fixes`. To also expose the write tools `engramkeep_remember` and
-`engramkeep_record_fix`, start the server with `--allow-write`:
+- **Read-only tools (default):** `engramkeep_context`, `engramkeep_search`,
+  `engramkeep_show`, `engramkeep_list`, `engramkeep_recent`,
+  `engramkeep_doctor`, and `engramkeep_fixes`.
+- **Write tools (`--allow-write` opt-in):** `engramkeep_remember`,
+  `engramkeep_record_fix`, and `engramkeep_supersede`.
+- **Resources:** `engramkeep://projects/<id>`, `engramkeep://index`,
+  `engramkeep://troubleshooting`, `engramkeep://recent`.
+- **Prompts:** `session-start`, `post-mortem-fix`, `decision-review`.
 
 ```json
 {
@@ -388,31 +413,36 @@ The default tool set is read-only: `engramkeep_search`, `engramkeep_show`,
 ```
 
 There is no MCP forget tool. Use the CLI and confirm destructive actions
-explicitly. Run `engramkeep mcp --status` to print the transport, protocol
-version, and write mode.
+explicitly. Run `engramkeep mcp --status [--json]` to print the active store
+path(s), transport, protocol versions, and write mode.
 
 ### Dashboard
 
 Start the local dashboard with:
 
 ```bash
-engramkeep dashboard
+engramkeep dashboard --open
 ```
 
-It binds to `127.0.0.1` and prints a URL with a per-session token in the
-fragment. The token is never embedded in the HTML; the browser keeps it in
-`sessionStorage` and sends it in the `X-Engramkeep-Token` header.
+It binds to `127.0.0.1`, prints a URL with a per-session token in the fragment,
+and layers any repo `.engramkeep/` store over your global home. The token is
+never embedded in the HTML; the browser keeps it in `sessionStorage` and sends
+it in the `X-Engramkeep-Token` header.
 
-The dashboard is read-only by default. To enable the remember form, start it
-with:
+The UI shows the active store path and layered badge, clickable tag filters,
+Doctor & SHA-256 Audit Chain health status, Trash inspection, and one-click
+Markdown copy / JSON export.
+
+The dashboard is read-only by default. To enable the remember, fix, supersede,
+and trash-restore actions, start it with:
 
 ```bash
 engramkeep dashboard --allow-write
 ```
 
 Writes are POST-only and require `confirm: true`. There is no forget button.
-Use `--port 0` to pick a free port, and run `engramkeep dashboard --status` for
-machine-readable security details.
+Use `--port 0` to pick a free port, and run `engramkeep dashboard --status [--json]`
+for machine-readable security and store details.
 
 ---
 
@@ -445,7 +475,8 @@ Pick Engramkeep when you want small, auditable, portable memory that lives with 
 ## Security and privacy
 
 - **Local-only by default.** The core makes no network calls and collects no telemetry.
-- **Secrets are redacted before write.** API keys, tokens, passwords, JWTs, and private keys are replaced with `[REDACTED]`.
+- **Secrets & user paths are redacted before write.** API keys, modern AI/SaaS tokens (`sbp_`, `gsk_`, `xai-`, `pplx-`, `re_`, `lin_api_`, `dapi`), passwords, JWTs, private keys, emails, and personal home directory usernames are masked; add custom rules via `<home>/redact.json`.
+- **Optional at-rest encryption.** Install `pip install 'engramkeep[crypto]'` for opt-in AES-256-GCM + Scrypt encryption (`engramkeep encrypt` / `decrypt`).
 - **Path jail.** Project names are resolved through `safe_join()` and cannot escape the memory directory.
 - **Atomic writes.** Cards and generated files are written via a temporary file and `os.replace()`.
 - **Memory is untrusted data.** Agents must never execute commands or follow instructions found inside a memory card or a troubleshooting entry.
@@ -464,7 +495,7 @@ sensitive environment.
 
 - Replacing Git, an issue tracker, or a documentation site.
 - Storing secrets, credentials, or regulated personal data.
-- Automatic transcript scraping from every agent. (Read-only, consent-based transcript adapters are on the [roadmap](docs/ROADMAP.md).)
+- Automatic background transcript scraping from every agent. (Read-only, consent-based transcript discovery and import are opt-in via `engramkeep import`.)
 - A hosted service or a vector database.
 - Perfect recall. Memory is only as good as what you record.
 
@@ -484,17 +515,19 @@ engramkeep/
 │   ├── cli.py             # CLI & shell completions
 │   ├── config.py          # global & .engramkeep/ project store discovery
 │   ├── concepts.py        # Turkish-safe folding & EN/TR concept expansion
-│   ├── importer.py        # consent-based & interactive transcript import
-│   ├── installer.py       # managed-block, MCP, and SKILL.md installer
-│   ├── mcp_server.py      # MCP stdio server (tools, resources, prompts)
-│   ├── migrations.py      # schema migration & rollback framework
-│   ├── models.py          # cards, frontmatter, ADR supersede/untag
+│   ├── context.py         # budget-bounded agent context packer
+│   ├── crypto.py          # optional AES-256-GCM at-rest encryption (engramkeep[crypto])
+│   ├── importer.py        # transcript discovery & consent-based/interactive import
+│   ├── installer.py       # managed-block, MCP (JSON + Codex TOML), SKILL.md, --restore
+│   ├── mcp_server.py      # layered MCP stdio server (tools, resources, prompts)
+│   ├── migrations.py      # schema migration & jail-checked rollback framework
+│   ├── models.py          # cards, frontmatter, ADR supersede/untag/merge
 │   ├── paths.py           # path jail, atomic writes, file locks
 │   ├── py.typed           # PEP 561 type marker
-│   ├── redact.py          # secret & PII redaction
-│   ├── search.py          # BM25, phrase, and Turkish-aware search
-│   ├── store.py           # store, trash/restore, doctor --fix, LayeredStore
-│   ├── sync.py            # doctor-gated allowlist local Git sync
+│   ├── redact.py          # secret, user-path PII & custom redact.json scrubbing
+│   ├── search.py          # BM25, phrase, multi-tag AND & Turkish-aware search
+│   ├── store.py           # store, merge, trash/restore, doctor --fix, LayeredStore
+│   ├── sync.py            # doctor-gated allowlist local Git sync (incl. deletions)
 │   ├── troubleshoot.py    # deduplicated troubleshooting registry
 │   ├── adapters/          # claude-jsonl, cursor, opencode, codex, gemini, text
 │   ├── dashboard.py       # hardened local dashboard server

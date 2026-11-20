@@ -5,6 +5,7 @@
   const state = {
     token: null,
     writes: false,
+    layered: false,
     projects: [],
     activeTag: null,
     currentCard: null,
@@ -222,7 +223,11 @@
       : projects;
     if (!filtered.length) {
       list.appendChild(
-        text("li", state.activeTag ? `No projects tagged '${state.activeTag}'.` : "No projects yet.", "muted")
+        text(
+          "li",
+          state.activeTag ? `No projects tagged '${state.activeTag}'.` : "No projects yet.",
+          "muted"
+        )
       );
       return;
     }
@@ -234,6 +239,9 @@
       button.addEventListener("click", () => loadCard(project.id));
       item.appendChild(button);
       item.appendChild(text("span", ` ${project.id}`, "muted"));
+      if (project.source) {
+        item.appendChild(text("span", project.source, `badge badge-${project.source}`));
+      }
       if (project.tags.length) {
         const tagWrap = document.createElement("div");
         tagWrap.className = "inline-tags";
@@ -261,6 +269,9 @@
       button.addEventListener("click", () => loadCard(hit.id));
       item.appendChild(button);
       item.appendChild(text("span", ` ${hit.id}`, "muted"));
+      if (hit.source) {
+        item.appendChild(text("span", hit.source, `badge badge-${hit.source}`));
+      }
       if (hit.snippet) {
         item.appendChild(text("p", hit.snippet, "snippet"));
       }
@@ -274,7 +285,10 @@
     const view = document.getElementById("card-view");
     clear(view);
     view.appendChild(text("h3", card.title));
-    view.appendChild(text("p", `id: ${card.id} | updated: ${card.updated}`, "muted"));
+    const meta = card.source
+      ? `id: ${card.id} | source: ${card.source} | updated: ${card.updated}`
+      : `id: ${card.id} | updated: ${card.updated}`;
+    view.appendChild(text("p", meta, "muted"));
     if (card.tags.length) {
       const tagWrap = document.createElement("div");
       tagWrap.className = "inline-tags";
@@ -309,6 +323,9 @@
       const item = document.createElement("li");
       item.appendChild(text("strong", `${hit.project} (${hit.date})`));
       item.appendChild(text("span", ` ${hit.workspace || "General"}`, "muted"));
+      if (hit.source) {
+        item.appendChild(text("span", hit.source, `badge badge-${hit.source}`));
+      }
       item.appendChild(text("p", `problem: ${hit.error}`, "snippet"));
       item.appendChild(text("p", `fix: ${hit.fix}`, "snippet"));
       list.appendChild(item);
@@ -316,7 +333,56 @@
   }
 
   function renderDoctor(report) {
+    const badges = document.getElementById("doctor-badges");
+    clear(badges);
+    badges.appendChild(
+      text("span", report.ok ? "Store: OK" : "Store: FAILED", report.ok ? "badge badge-ok" : "badge badge-err")
+    );
+    const chainStatus = report.audit_chain_status || "unknown";
+    const chainClass = report.audit_chain_ok === false ? "badge badge-err" : "badge badge-ok";
+    badges.appendChild(text("span", `Audit chain: ${chainStatus}`, chainClass));
+    badges.appendChild(text("span", `Cards: ${report.cards}`, "badge"));
     document.getElementById("doctor-view").textContent = JSON.stringify(report, null, 2);
+  }
+
+  function renderTrash(items) {
+    const list = document.getElementById("trash-list");
+    clear(list);
+    if (!items.length) {
+      list.appendChild(text("li", "Trash is empty.", "muted"));
+      return;
+    }
+    for (const entry of items) {
+      const item = document.createElement("li");
+      item.appendChild(text("strong", entry.project_id));
+      item.appendChild(text("span", ` ${entry.filename}`, "muted"));
+      if (state.writes) {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "secondary small";
+        btn.textContent = "Restore";
+        btn.addEventListener("click", async () => {
+          try {
+            setStatus(`Restoring ${entry.project_id}...`);
+            await api("/api/restore", {
+              method: "POST",
+              body: JSON.stringify({
+                project: entry.project_id,
+                filename: entry.filename,
+                confirm: true,
+              }),
+            });
+            setStatus(`Restored '${entry.project_id}'.`);
+            await Promise.all([loadProjects(), loadTrash(), loadRecent(), loadDoctor()]);
+          } catch (error) {
+            setStatus(error.message, true);
+          }
+        });
+        item.appendChild(document.createTextNode(" "));
+        item.appendChild(btn);
+      }
+      list.appendChild(item);
+    }
   }
 
   async function loadProjects() {
@@ -348,14 +414,28 @@
     renderDoctor(data.report);
   }
 
+  async function loadTrash() {
+    const data = await api("/api/trash");
+    renderTrash(data.trash);
+  }
+
   async function refresh() {
     setStatus("Loading...");
     try {
       const health = await api("/api/health");
       state.writes = Boolean(health.writes);
+      state.layered = Boolean(health.layered);
+      const pathNode = document.getElementById("store-path");
+      pathNode.textContent = health.project_home
+        ? `Store: ${health.home} + project: ${health.project_home}`
+        : `Store: ${health.home || ""}`;
+      const layerBadge = document.getElementById("layer-badge");
+      layerBadge.hidden = !state.layered;
+      layerBadge.textContent = "Layered: project + global";
       document.getElementById("remember-section").hidden = !state.writes;
+      document.getElementById("supersede-section").hidden = !state.writes;
       document.getElementById("fix-section").hidden = !state.writes;
-      await Promise.all([loadProjects(), loadRecent(), loadFixes(), loadDoctor()]);
+      await Promise.all([loadProjects(), loadRecent(), loadFixes(), loadDoctor(), loadTrash()]);
       setStatus(state.writes ? "Ready. Writes are enabled." : "Ready. Read-only mode.");
     } catch (error) {
       setStatus(error.message, true);
@@ -463,6 +543,45 @@
       });
       document.getElementById("remember-form").reset();
       setStatus("Decision remembered.");
+      await Promise.all([loadProjects(), loadRecent(), loadDoctor()]);
+    } catch (error) {
+      setStatus(error.message, true);
+    }
+  });
+
+  document.getElementById("supersede-form").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (!state.writes) {
+      setStatus("Writes are disabled.", true);
+      return;
+    }
+    if (!document.getElementById("sup-confirm").checked) {
+      setStatus("Confirm before superseding a decision.", true);
+      return;
+    }
+    const project = document.getElementById("sup-project").value.trim();
+    const oldDecision = document.getElementById("sup-old").value.trim();
+    const newDecision = document.getElementById("sup-new").value.trim();
+    const reason = document.getElementById("sup-reason").value.trim() || undefined;
+    if (!project || !oldDecision || !newDecision) {
+      setStatus("Project, old decision, and new decision are required.", true);
+      return;
+    }
+    try {
+      setStatus("Superseding decision...");
+      const res = await api("/api/supersede", {
+        method: "POST",
+        body: JSON.stringify({
+          project,
+          old_decision: oldDecision,
+          new_decision: newDecision,
+          reason,
+          confirm: true,
+        }),
+      });
+      document.getElementById("supersede-form").reset();
+      setStatus("Decision superseded with ADR history.");
+      renderCard(res.card);
       await Promise.all([loadProjects(), loadRecent(), loadDoctor()]);
     } catch (error) {
       setStatus(error.message, true);

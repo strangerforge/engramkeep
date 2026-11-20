@@ -102,6 +102,7 @@ def test_initialize_and_tools_list(home: Path) -> None:
 
     tools = {tool["name"]: tool for tool in responses[1]["result"]["tools"]}
     assert set(tools) == {
+        "engramkeep_context",
         "engramkeep_search",
         "engramkeep_show",
         "engramkeep_list",

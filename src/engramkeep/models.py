@@ -403,3 +403,72 @@ def supersede_decision(
 
     card.updated = timestamp
     return matched_old, cleaned_new
+
+
+def _extract_section_bullets(body: str, heading: str) -> list[str]:
+    lines = body.splitlines()
+    start = _find_heading(lines, heading)
+    if start is None:
+        return []
+    end = next(
+        (i for i in range(start + 1, len(lines)) if lines[i].startswith("## ")),
+        len(lines),
+    )
+    bullets: list[str] = []
+    for idx in range(start + 1, end):
+        stripped = lines[idx].strip()
+        if stripped.startswith("- "):
+            bullets.append(stripped[2:].strip())
+    return bullets
+
+
+def merge_cards(
+    source: Card,
+    target: Card,
+    *,
+    now: str | None = None,
+) -> tuple[Card, int, int, list[str]]:
+    """Merge decisions, superseded history, and tags from ``source`` into ``target``.
+
+    Returns ``(merged_target, decisions_added, superseded_added, tags_added)``.
+    The ``target`` card is mutated in place and returned.
+    """
+    timestamp = now or utc_now_iso()
+    decisions_added = 0
+    for decision in _extract_section_bullets(source.body, "Decisions"):
+        if append_decision(target, decision, now=timestamp):
+            decisions_added += 1
+
+    superseded_added = 0
+    source_superseded = _extract_section_bullets(source.body, "Superseded")
+    if source_superseded:
+        existing_superseded = set(_extract_section_bullets(target.body, "Superseded"))
+        lines = target.body.splitlines()
+        sup_index = _find_heading(lines, "Superseded")
+        for item in source_superseded:
+            if item in existing_superseded:
+                continue
+            bullet = f"- {item}"
+            if sup_index is None:
+                base = "\n".join(lines).rstrip()
+                lines = (base + f"\n\n## Superseded\n\n{bullet}").splitlines()
+                sup_index = _find_heading(lines, "Superseded")
+            else:
+                next_heading = next(
+                    (i for i in range(sup_index + 1, len(lines)) if lines[i].startswith("## ")),
+                    len(lines),
+                )
+                insert_at = next_heading
+                while insert_at > sup_index + 1 and not lines[insert_at - 1].strip():
+                    insert_at -= 1
+                lines.insert(insert_at, bullet)
+            existing_superseded.add(item)
+            superseded_added += 1
+        target.body = "\n".join(lines).rstrip() + "\n"
+
+    tags_added = add_tags(target, source.tags, now=timestamp)
+    if source.created and (not target.created or source.created < target.created):
+        target.created = source.created
+    if decisions_added or superseded_added or tags_added:
+        target.updated = timestamp
+    return target, decisions_added, superseded_added, tags_added

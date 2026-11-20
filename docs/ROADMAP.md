@@ -26,28 +26,38 @@ This roadmap tracks Engramkeep's release milestones and security gates.
 
 - Field-weighted BM25 + quoted phrase search and consent-based transcript import.
 
-## 0.7.0 - Daily agent experience (included in 1.0.0)
+## 1.0.0 - Stable (released)
 
-- [x] Fix deduplication, `trash` / `restore` commands, Turkish-safe case folding & agglutinative prefix matching, `py.typed`, and `doctor --fix`.
-- [x] Layered project (`.engramkeep/`) + global memory search and read overlay.
-- [x] Decision lifecycle: `supersede` (ADR history), `untag`, and single-decision `forget --decision`.
-- [x] MCP multi-version negotiation (`2024-11-05` through `2025-11-25`), MCP Resources (`engramkeep://...`), MCP Prompts, and `engramkeep_supersede`.
-- [x] Expanded installer: MCP support across 9 agents, `--mcp-allow-write`, portable command selection, and `--skill`.
-- [x] Modular dashboard assets, `POST /api/fixes`, `GET /api/export`, clickable tag filters, structured text-only Markdown rendering, copy/export buttons, and `--open`.
+- Fix deduplication, `trash` / `restore`, Turkish-safe search & prefix matching, `py.typed`, and `doctor --fix`.
+- Layered project (`.engramkeep/`) + global memory search and read overlay.
+- Decision lifecycle (`supersede`, `untag`, `forget --decision`).
+- MCP multi-version negotiation, resources (`engramkeep://...`), prompts, and `engramkeep_supersede`.
+- Expanded installer (9 MCP agents, `--mcp-allow-write`, `--skill`) and modular dashboard.
+- Schema migrations (`engramkeep migrate`), SHA-256 hash-chained `audit.log`, allowlist `engramkeep sync`, multi-agent transcript adapters (`import --interactive`), and shell completion.
 
-## 1.0.0 - Stable (current)
+## 1.2.0 - Precision, Context Packing, and Release Integrity (current)
 
-- [x] Schema migration framework (`engramkeep migrate`) with automatic backups and rollback.
-- [x] Tamper-evident SHA-256 hash-chained `audit.log` verified by `engramkeep doctor`.
-- [x] Safe allowlist local Git sync (`engramkeep sync`, doctor-gated, never auto-pushes or runs `git add -A`).
-- [x] Modular multi-agent transcript adapters (`claude-jsonl`, `cursor`, `opencode`, `codex`, `gemini`, `text`) with natural-language extraction and `import --interactive`.
-- [x] Shell completion scripts (`bash`, `zsh`, `fish`, `powershell`).
-- [x] Synchronized English and Turkish documentation, threat model, and architecture docs.
+- [x] **Reliability & security hardening:**
+  - Tracked allowlist deletion handling in `engramkeep sync` (fixes ghost cards after `forget`).
+  - Consistent `--local` flag across all store CLI commands; `LayeredStore` support in `mcp` and `dashboard`.
+  - OpenAI Codex MCP registration in TOML (`config.toml` managed block), `.venv`-safe portable MCP resolution + `--mcp-command`, shared-target deduplication (`--agent all`), and `install --restore <run>`.
+  - Strict rollback containment in `migrate --rollback` + stray-file cleanup on failed migrations; `is_link_or_junction()` in MCP `resources/read`.
+  - Modern AI/SaaS token redaction (`sbp_`, `gsk_`, `xai-`, `pplx-`, `re_`, `lin_api_`, `dapi`), user-path username masking (`[REDACTED_USER]`), and ReDoS-guarded custom `<home>/redact.json` rules.
+  - Sealed SHA-256 audit chain in `examples/brain/audit.log` and version/`SKILL.md`/asset-budget parity checks in `check_repo_hygiene.py`.
+- [x] **Daily ergonomics & dashboard v1.1:**
+  - Budget-bounded context packer (`engramkeep context` CLI + `engramkeep_context` MCP tool).
+  - Card consolidation (`engramkeep merge <source> <target> [--delete-source]`), multi-tag AND filtering (`search --tag a --tag b`), `recent --since YYYY-MM-DD`, and `doctor` duplicate-title warnings.
+  - Transcript discovery (`engramkeep import --discover`), question filtering, sequence-based error-fix pairing, stricter `claude-jsonl` detection, and stderr prompts for `--interactive --json`.
+  - Dashboard store-path & layered badges, Doctor/Audit health panel, Trash view + `POST /api/restore`, and `POST /api/supersede`.
+- [x] **Optional encryption & release supply chain:**
+  - Opt-in at-rest AEAD encryption (`engramkeep encrypt` / `decrypt` via optional `engramkeep[crypto]` extra).
+  - Release `SHA256SUMS.txt` checksums and SLSA build provenance attestation (`actions/attest-build-provenance`).
+  - CLI exit codes reference (`docs/EXIT_CODES.md`) and full EN/TR doc sync.
 
 ## Future considerations
 
-- Optional encryption at rest with a user-supplied key.
-- Signed release provenance / SBOM artifacts.
+- Additional community-requested transcript adapters and language concept packs (opt-in, zero runtime deps).
+- Richer card export formats (ADR bundle / static HTML snapshot).
 
 ## Non-goals
 

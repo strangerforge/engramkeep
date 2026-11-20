@@ -7,6 +7,90 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-11-20
+
+### Added
+
+- **Budget-bounded context packer (`context.py`, `cli.py`, `mcp_server.py`):**
+  - Added `engramkeep context [query] [--project ID] [--tag TAG ...] [--max-chars N] [--json]`
+    and read-only MCP tool `engramkeep_context` to pack the highest-ranked
+    project cards and verified fixes into a single untrusted-data-framed
+    Markdown brief within a strict character budget (`300`–`32000` chars).
+- **Card merging, multi-tag AND search, and date-filtered activity (`models.py`, `search.py`, `store.py`, `cli.py`):**
+  - Added `engramkeep merge <source> <target> [--delete-source] [--local]`
+    to consolidate active decisions, `## Superseded` ADR history, tags, and
+    earliest creation timestamp across cards.
+  - Made `search --tag` repeatable (`--tag a --tag b`) with AND semantics.
+  - Added `recent --since YYYY-MM-DD` validation and filtering.
+  - Added duplicate card title warnings to `engramkeep doctor`.
+- **Transcript discovery (`importer.py`, `cli.py`):**
+  - Added `engramkeep import --discover` to perform read-only metadata discovery
+    across standard local Claude Code, Codex, OpenCode, Gemini CLI, and Cursor
+    session folders (skipping symlinks).
+- **Dashboard v1.1 layered & lifecycle UI (`dashboard.py`, `dashboard_assets/`):**
+  - Integrated `LayeredStore` (`--project-store`, `--no-local`), displaying the
+    active store path, `[project]` / `[global]` layer badges, Doctor & SHA-256
+    Audit Chain health badges, Trash listing (`GET /api/trash`), and opt-in
+    `POST /api/supersede` and `POST /api/restore` (`--allow-write` + `confirm: true`).
+- **Installer restore, Codex TOML MCP, and `--mcp-command` (`installer.py`, `cli.py`):**
+  - Added OpenAI Codex TOML MCP registration (`config.toml` managed block
+    `# engramkeep:mcp:begin`..`# engramkeep:mcp:end`).
+  - Added `engramkeep install --restore <run-id> [--apply]` (dry-run default)
+    and explicit `--dry-run` / `--mcp-command CMD` flags.
+- **Custom ReDoS-guarded redaction & modern secret coverage (`redact.py`, `store.py`):**
+  - Added modern AI/SaaS token patterns (`sbp_`, `gsk_`, `xai-`, `pplx-`, `re_`,
+    `lin_api_`, `dapi`) and personal home-path username masking
+    (`[REDACTED_USER]`).
+  - Added user-configurable `<home>/redact.json` rules validated against
+    ReDoS-prone nested quantifiers and empty-match patterns, enforced in both
+    writes and `engramkeep doctor`.
+- **Optional at-rest AEAD encryption (`crypto.py`, `errors.py`, `cli.py`, `pyproject.toml`):**
+  - Added opt-in `engramkeep encrypt` / `engramkeep decrypt` using AES-256-GCM
+    + Scrypt KDF (`pip install 'engramkeep[crypto]'`, dry-run default,
+    timestamped backups under `backups/crypto/`, passphrase via
+    `ENGRAMKEEP_PASSPHRASE` or `getpass`, never CLI args). Core runtime remains
+    zero-dependency (`dependencies = []`).
+- **Supply-chain release integrity & exit code docs (`.github/workflows/release.yml`, `docs/EXIT_CODES.md`, `scripts/check_repo_hygiene.py`):**
+  - Added `SHA256SUMS.txt` generation and pinned SLSA build provenance
+    attestation (`actions/attest-build-provenance`) to the release workflow.
+  - Added `docs/EXIT_CODES.md` and enforced `pyproject.toml == __version__`,
+    `skills/engramkeep/SKILL.md == src/engramkeep/data/SKILL.md`, and asset
+    budget parity in `scripts/check_repo_hygiene.py`.
+
+### Fixed
+
+- **Ghost cards in `engramkeep sync` (`sync.py`):** Tracked allowlisted card
+  deletions (`D projects/<id>.md`) are now surfaced by `sync --status` and
+  staged with `git rm --cached --ignore-unmatch` on `sync --commit`.
+- **Consistent `--local` and layered support (`cli.py`, `mcp_server.py`, `dashboard.py`):**
+  - Added `--local` across all store CLI commands (`init` through `path`).
+  - Wired `LayeredStore` into `mcp_server.py` (including merged troubleshooting
+    resources) and `dashboard.py`, with `--status --json` printing active store
+    paths.
+- **Installer edge cases (`installer.py`):**
+  - Deduplicated shared rule targets during `--agent all` (e.g., `gemini-cli`
+    and `antigravity` both targeting `~/.gemini/GEMINI.md`, recording `shared`
+    for the duplicate).
+  - Avoided binding MCP configs to ephemeral `.venv` executables when resolving
+    the portable `engramkeep` command.
+- **Transcript adapter accuracy (`adapters/base.py`, `adapters/formats.py`, `cli.py`):**
+  - Filtered questions (`?`) out of natural-language decision matches, switched
+    error-to-fix pairing to extracted sequence index (`<= 12`), tightened
+    `ClaudeJsonlAdapter.can_handle` against arbitrary JSON files, and sent
+    `import --interactive --json` prompts to `stderr` so `stdout` stays valid JSON.
+- **Migration rollback & MCP link hardening (`migrations.py`, `mcp_server.py`):**
+  - Confined `rollback_migration()` strictly inside `<home>/backups/migrations/`
+    (rejecting symlinks and external paths) and cleaned up newly created stray
+    managed files during rollback.
+  - Replaced `.is_symlink()` with `is_link_or_junction()` in MCP `resources/read`.
+- **Example store & docs drift (`examples/brain/audit.log`, `docs/*`, `README*.md`, `templates/*`, `skills/*`):**
+  - Sealed `examples/brain/audit.log` with a valid SHA-256 hash chain.
+  - Synchronized `COMPATIBILITY.md`, `PRIVACY.md`, `RELEASING.md`, `LAUNCH.md`,
+    `ARCHITECTURE.md`, `THREAT_MODEL.md`, `ROADMAP.md`, `AGENTS.md`,
+    `SKILL.md`, templates, and `README.md` / `README.tr.md` for 1.2.0.
+  - Removed non-synthetic placeholder strings from `tests/test_importer.py` and
+    `tests/test_concepts.py`.
+
 ## [1.0.0] - 2026-11-20
 
 ### Added

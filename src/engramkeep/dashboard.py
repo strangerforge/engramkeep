@@ -26,7 +26,7 @@ from .config import resolve_home
 from .dashboard_assets import load_asset
 from .errors import EngramkeepError, StoreError, ValidationError
 from .search import search_cards
-from .store import Store
+from .store import LayeredStore, Store
 
 DEFAULT_PORT = 8765
 MAX_BODY_BYTES = 65_536
@@ -47,9 +47,13 @@ APP_JS = load_asset("app.js")
 STYLE_CSS = load_asset("style.css")
 
 
-def status() -> dict[str, str]:
+def status(
+    home: Path | str | None = None,
+    *,
+    project_home: Path | str | None = None,
+) -> dict[str, str]:
     """Return machine-readable dashboard status."""
-    return {
+    info: dict[str, str] = {
         "component": "dashboard",
         "status": "available",
         "bind": "127.0.0.1",
@@ -57,6 +61,11 @@ def status() -> dict[str, str]:
         "writes": "disabled unless --allow-write is passed",
         "csp": "strict",
     }
+    if home is not None:
+        info["home"] = str(Path(home).expanduser().resolve())
+    if project_home is not None:
+        info["project_home"] = str(Path(project_home).expanduser().resolve())
+    return info
 
 
 def _first(query: dict[str, list[str]], name: str) -> str | None:
@@ -100,9 +109,11 @@ class DashboardServer(ThreadingHTTPServer):
         token: str,
         allow_write: bool,
         stderr: TextIO,
+        project_store: Store | None = None,
     ) -> None:
         super().__init__(address, DashboardHandler)
         self.store = store
+        self.layered = LayeredStore(store, project_store)
         self.token = token
         self.allow_write = allow_write
         self.stderr = stderr
@@ -160,9 +171,9 @@ class DashboardHandler(BaseHTTPRequestHandler):
         self._send_json(HTTPStatus.NOT_FOUND, {"error": "not found"})
 
     def do_POST(self) -> None:
-        """Accept opt-in remember and fix mutations only."""
+        """Accept opt-in remember, fix, supersede, and restore mutations only."""
         path = urlsplit(self.path).path
-        if path not in {"/api/remember", "/api/fixes"}:
+        if path not in {"/api/remember", "/api/fixes", "/api/supersede", "/api/restore"}:
             self._drain_body()
             if not self._valid_host():
                 return
@@ -209,8 +220,12 @@ class DashboardHandler(BaseHTTPRequestHandler):
 
         if path == "/api/remember":
             self._handle_post_remember(body)
-        else:
+        elif path == "/api/fixes":
             self._handle_post_fix(body)
+        elif path == "/api/supersede":
+            self._handle_post_supersede(body)
+        else:
+            self._handle_post_restore(body)
 
     def _handle_post_remember(self, body: dict[str, Any]) -> None:
         project = body.get("project")
@@ -298,6 +313,84 @@ class DashboardHandler(BaseHTTPRequestHandler):
             return
         self._send_json(HTTPStatus.OK, {"fix": entry.to_dict(), "added": added})
 
+    def _handle_post_supersede(self, body: dict[str, Any]) -> None:
+        project = body.get("project")
+        old_decision = body.get("old_decision")
+        new_decision = body.get("new_decision")
+        reason = body.get("reason")
+        if not isinstance(project, str) or not project.strip() or len(project) > 128:
+            self._send_json(
+                HTTPStatus.BAD_REQUEST,
+                {"error": "project must be a non-empty string of at most 128 characters"},
+            )
+            return
+        if (
+            not isinstance(old_decision, str)
+            or not old_decision.strip()
+            or len(old_decision) > 4_000
+        ):
+            self._send_json(
+                HTTPStatus.BAD_REQUEST,
+                {"error": "old_decision must be a non-empty string of at most 4000 characters"},
+            )
+            return
+        if (
+            not isinstance(new_decision, str)
+            or not new_decision.strip()
+            or len(new_decision) > 4_000
+        ):
+            self._send_json(
+                HTTPStatus.BAD_REQUEST,
+                {"error": "new_decision must be a non-empty string of at most 4000 characters"},
+            )
+            return
+        if reason is not None and (not isinstance(reason, str) or len(reason) > 500):
+            self._send_json(
+                HTTPStatus.BAD_REQUEST,
+                {"error": "reason must be a string of at most 500 characters"},
+            )
+            return
+        try:
+            result = self.server.store.supersede(project, old_decision, new_decision, reason=reason)
+        except EngramkeepError as exc:
+            self._send_json(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
+            return
+        except Exception as exc:  # pragma: no cover - defensive boundary
+            self._log_internal_error(exc)
+            self._send_json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": "internal error"})
+            return
+        self._send_json(HTTPStatus.OK, result.to_dict())
+
+    def _handle_post_restore(self, body: dict[str, Any]) -> None:
+        project = body.get("project")
+        filename = body.get("filename")
+        force = body.get("force", False)
+        if not isinstance(project, str) or not project.strip() or len(project) > 128:
+            self._send_json(
+                HTTPStatus.BAD_REQUEST,
+                {"error": "project must be a non-empty string of at most 128 characters"},
+            )
+            return
+        if filename is not None and (not isinstance(filename, str) or len(filename) > 255):
+            self._send_json(
+                HTTPStatus.BAD_REQUEST,
+                {"error": "filename must be a string of at most 255 characters"},
+            )
+            return
+        if not isinstance(force, bool):
+            self._send_json(HTTPStatus.BAD_REQUEST, {"error": "force must be a boolean"})
+            return
+        try:
+            card = self.server.store.restore(project, filename=filename, force=force)
+        except EngramkeepError as exc:
+            self._send_json(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
+            return
+        except Exception as exc:  # pragma: no cover - defensive boundary
+            self._log_internal_error(exc)
+            self._send_json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": "internal error"})
+            return
+        self._send_json(HTTPStatus.OK, {"card": card.to_dict()})
+
     def do_OPTIONS(self) -> None:
         """Reject preflight requests; the dashboard has no CORS surface."""
         if not self._valid_host():
@@ -325,9 +418,21 @@ class DashboardHandler(BaseHTTPRequestHandler):
     def _handle_get_api(self, path: str, query: dict[str, list[str]]) -> None:
         try:
             if path == "/api/health":
+                project_home = (
+                    str(self.server.layered.project_store.home)
+                    if self.server.layered.is_layered
+                    and self.server.layered.project_store is not None
+                    else None
+                )
                 self._send_json(
                     HTTPStatus.OK,
-                    {"status": "ok", "writes": self.server.allow_write},
+                    {
+                        "status": "ok",
+                        "writes": self.server.allow_write,
+                        "home": str(self.server.store.home),
+                        "project_home": project_home,
+                        "layered": self.server.layered.is_layered,
+                    },
                 )
                 return
             if path == "/api/cards":
@@ -352,10 +457,16 @@ class DashboardHandler(BaseHTTPRequestHandler):
                     {"report": self.server.store.doctor().to_dict()},
                 )
                 return
+            if path == "/api/trash":
+                self._send_json(
+                    HTTPStatus.OK,
+                    {"trash": [item.to_dict() for item in self.server.store.list_trash()]},
+                )
+                return
             if path == "/api/export":
                 self._send_json(HTTPStatus.OK, self.server.store.export_cards())
                 return
-            if path == "/api/remember":
+            if path in {"/api/remember", "/api/supersede", "/api/restore"}:
                 self._send_method_not_allowed("POST")
                 return
             self._send_json(HTTPStatus.NOT_FOUND, {"error": "not found"})
@@ -366,29 +477,50 @@ class DashboardHandler(BaseHTTPRequestHandler):
             self._send_json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": "internal error"})
 
     def _send_projects(self) -> None:
-        scan = self.server.store.scan_cards()
-        cards = sorted(
-            scan.cards,
+        if self.server.layered.is_layered:
+            cards, sources, errors = self.server.layered.scan_cards()
+        else:
+            scan = self.server.store.scan_cards()
+            cards = scan.cards
+            sources = {}
+            errors = list(scan.errors)
+        cards.sort(
             key=lambda card: (card.updated, card.title.lower()),
             reverse=True,
         )
+        projects: list[dict[str, object]] = []
+        for card in cards:
+            item: dict[str, object] = {
+                "id": card.id,
+                "title": card.title,
+                "tags": list(card.tags),
+                "updated": card.updated,
+            }
+            if card.id in sources:
+                item["source"] = sources[card.id]
+            projects.append(item)
         self._send_json(
             HTTPStatus.OK,
             {
-                "projects": [
-                    {
-                        "id": card.id,
-                        "title": card.title,
-                        "tags": list(card.tags),
-                        "updated": card.updated,
-                    }
-                    for card in cards
-                ],
-                "errors": list(scan.errors),
+                "projects": projects,
+                "errors": errors,
             },
         )
 
     def _send_card(self, project: str) -> None:
+        if self.server.layered.is_layered:
+            found = self.server.layered.get_card(project)
+            if found is None:
+                self._send_json(
+                    HTTPStatus.NOT_FOUND,
+                    {"error": f"project not found: {project}"},
+                )
+                return
+            layered_card, source = found
+            payload = layered_card.to_dict()
+            payload["source"] = source
+            self._send_json(HTTPStatus.OK, {"card": payload})
+            return
         card = self.server.store.get_card(project)
         if card is None:
             self._send_json(
@@ -420,11 +552,15 @@ class DashboardHandler(BaseHTTPRequestHandler):
             )
             return
         limit = _int_parameter(query, "limit", DEFAULT_LIMIT)
-        scan = self.server.store.scan_cards()
-        hits = search_cards(scan.cards, text, tag=tag, limit=limit)
+        if self.server.layered.is_layered:
+            hits, errors = self.server.layered.search(text, tag=tag, limit=limit)
+        else:
+            scan = self.server.store.scan_cards()
+            hits = search_cards(scan.cards, text, tag=tag, limit=limit)
+            errors = list(scan.errors)
         self._send_json(
             HTTPStatus.OK,
-            {"hits": [hit.to_dict() for hit in hits], "errors": list(scan.errors)},
+            {"hits": [hit.to_dict() for hit in hits], "errors": errors},
         )
 
     def _send_fixes(self, query: dict[str, list[str]]) -> None:
@@ -436,7 +572,11 @@ class DashboardHandler(BaseHTTPRequestHandler):
             )
             return
         limit = _int_parameter(query, "limit", DEFAULT_LIMIT)
-        hits = self.server.store.search_fixes(text or None, limit=limit)
+        hits = (
+            self.server.layered.search_fixes(text or None, limit=limit)
+            if self.server.layered.is_layered
+            else self.server.store.search_fixes(text or None, limit=limit)
+        )
         self._send_json(
             HTTPStatus.OK,
             {"fixes": [hit.to_dict() for hit in hits]},
@@ -646,6 +786,7 @@ def create_server(
     port: int = DEFAULT_PORT,
     allow_write: bool = False,
     token: str | None = None,
+    project_home: Path | str | None = None,
     stderr: TextIO | None = None,
 ) -> DashboardServer:
     """Create a loopback-only dashboard server without starting it."""
@@ -653,6 +794,7 @@ def create_server(
         raise StoreError("port must be between 0 and 65535")
     store = Store(home)
     store.require_initialized()
+    project_store = Store(project_home) if project_home is not None else None
     session_token = token if token is not None else secrets.token_urlsafe(32)
     if not session_token:
         raise StoreError("dashboard token must not be empty")
@@ -662,6 +804,7 @@ def create_server(
         token=session_token,
         allow_write=allow_write,
         stderr=stderr if stderr is not None else sys.stderr,
+        project_store=project_store,
     )
 
 
@@ -671,6 +814,7 @@ def serve(
     port: int = DEFAULT_PORT,
     allow_write: bool = False,
     open_browser: bool = False,
+    project_home: Path | str | None = None,
     stdout: TextIO | None = None,
     stderr: TextIO | None = None,
 ) -> int:
@@ -679,6 +823,7 @@ def serve(
         home if home is not None else resolve_home(),
         port=port,
         allow_write=allow_write,
+        project_home=project_home,
         stderr=stderr,
     )
     out = stdout if stdout is not None else sys.stdout

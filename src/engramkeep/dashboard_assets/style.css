@@ -50,6 +50,51 @@ header {
   flex-wrap: wrap;
 }
 
+.header-actions {
+  align-items: center;
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.small-text {
+  font-size: 0.85rem;
+}
+
+.badge-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-bottom: 0.65rem;
+}
+
+.badge {
+  background: var(--pill-bg);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text);
+  display: inline-block;
+  font-size: 0.78rem;
+  font-weight: 600;
+  margin-left: 0.35rem;
+  padding: 0.1rem 0.5rem;
+}
+
+.badge-ok {
+  border-color: #2da44e;
+  color: #1a7f37;
+}
+
+.badge-err {
+  border-color: var(--error);
+  color: var(--error);
+}
+
+.badge-project {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
 .brand {
   align-items: center;
   display: flex;
