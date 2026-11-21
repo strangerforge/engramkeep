@@ -27,7 +27,76 @@ MAX_CUSTOM_RULES = 50
 MAX_RULE_PATTERN_CHARS = 256
 MAX_CUSTOM_SCAN_CHARS = 262_144
 
-_NESTED_QUANTIFIER_RE = re.compile(r"\((?:[^()\\]|\\.)*[+*](?:[^()\\]|\\.)*\)[+*{]")
+_BACKREFERENCE_RE = re.compile(r"(?<!\\)\\[1-9]|(?<!\\)\(\?P=")
+
+
+def _has_redos_risk(pattern_text: str) -> bool:
+    """Detect common catastrophic-backtracking constructs in user regexes.
+
+    Flags backreferences, nested quantifiers (including bounded ``{m,n}`` and
+    nested groups), and alternation ``|`` inside any quantified group.
+    """
+    if _BACKREFERENCE_RE.search(pattern_text):
+        return True
+
+    # Track per-group state: [has_quantifier_inside, has_alternation_inside].
+    stack: list[list[bool]] = []
+    in_char_class = False
+    i = 0
+    n = len(pattern_text)
+    while i < n:
+        ch = pattern_text[i]
+        if ch == "\\":
+            i += 2
+            continue
+        if in_char_class:
+            if ch == "]":
+                in_char_class = False
+            i += 1
+            continue
+        if ch == "[":
+            in_char_class = True
+            i += 1
+            continue
+        if ch == "(":
+            stack.append([False, False])
+            i += 1
+            continue
+        if ch == "|":
+            if stack:
+                stack[-1][1] = True
+            i += 1
+            continue
+        if ch in "+*":
+            if stack:
+                stack[-1][0] = True
+            i += 1
+            continue
+        if ch == "{":
+            close = pattern_text.find("}", i + 1)
+            if close != -1 and re.fullmatch(r"\d+(?:,\d*)?", pattern_text[i + 1 : close]):
+                if stack:
+                    stack[-1][0] = True
+                i = close + 1
+                continue
+        if ch == ")" and stack:
+            has_quant, has_alt = stack.pop()
+            # Check if the closed group itself is immediately quantified.
+            j = i + 1
+            group_quantified = False
+            if j < n and pattern_text[j] in "+*":
+                group_quantified = True
+            elif j < n and pattern_text[j] == "{":
+                close = pattern_text.find("}", j + 1)
+                if close != -1 and re.fullmatch(r"\d+(?:,\d*)?", pattern_text[j + 1 : close]):
+                    group_quantified = True
+            if group_quantified and (has_quant or has_alt):
+                return True
+            if stack and (has_quant or group_quantified):
+                stack[-1][0] = True
+        i += 1
+    return False
+
 
 _PRIVATE_KEY = re.compile(
     r"-----BEGIN (?:[A-Z0-9 ]{0,40}PRIVATE KEY(?: BLOCK)?|OPENSSH PRIVATE KEY)-----"
@@ -123,9 +192,10 @@ def compile_custom_rule(
         raise ValidationError(
             f"redaction rule {clean_name!r} exceeds {MAX_RULE_PATTERN_CHARS} character limit"
         )
-    if _NESTED_QUANTIFIER_RE.search(pattern_text):
+    if _has_redos_risk(pattern_text):
         raise ValidationError(
-            f"redaction rule {clean_name!r} rejected due to nested quantifiers (ReDoS risk)"
+            f"redaction rule {clean_name!r} rejected due to nested quantifiers or unsafe "
+            "repetition (ReDoS risk)"
         )
     try:
         compiled = re.compile(pattern_text)

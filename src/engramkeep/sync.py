@@ -93,9 +93,10 @@ def _git_executable() -> str:
 
 def _run_git(home: Path, args: list[str]) -> subprocess.CompletedProcess[str]:
     git = _git_executable()
+    safe_prefix = ["-c", "core.hooksPath=", "-c", "core.fsmonitor=false"]
     try:
         return subprocess.run(  # noqa: S603 - explicit git binary and static arg list, shell=False
-            [git, *args],
+            [git, *safe_prefix, *args],
             cwd=str(home),
             capture_output=True,
             text=True,
@@ -217,70 +218,87 @@ def sync_commit(
     malformed cards, or audit-log tampering are detected. Dry-run by default.
     Never runs ``git add -A`` or ``git push``.
     """
-    status = sync_status(store)
-    if not status.is_git_repo:
-        raise StoreError(
-            f"store is not a Git repository: {store.home}; run 'engramkeep sync --init' first"
-        )
-    if not status.doctor_ok:
-        details = "; ".join(status.doctor_errors)
-        raise StoreError(f"refusing to sync unhealthy store (doctor failed): {details}")
+    with store._write_lock():
+        status = sync_status(store)
+        if not status.is_git_repo:
+            raise StoreError(
+                f"store is not a Git repository: {store.home}; run 'engramkeep sync --init' first"
+            )
+        if not status.doctor_ok:
+            details = "; ".join(status.doctor_errors)
+            raise StoreError(f"refusing to sync unhealthy store (doctor failed): {details}")
 
-    candidates = list(status.changed_files)
-    if not candidates:
-        return SyncCommitResult(
-            mode="clean",
-            committed=False,
-            staged_files=[],
-            message="no allowlisted changes to commit",
-        )
+        staged_before = _run_git(store.home, ["diff", "--cached", "--name-only"])
+        if staged_before.returncode == 0:
+            non_allowlisted = [
+                line.strip().replace("\\", "/")
+                for line in staged_before.stdout.splitlines()
+                if line.strip() and not is_allowlisted_path(line.strip())
+            ]
+            if non_allowlisted:
+                raise StoreError(
+                    "refusing to commit while non-allowlisted file(s) are staged in the Git "
+                    f"index: {', '.join(non_allowlisted)}"
+                )
 
-    if not apply:
+        candidates = list(status.changed_files)
+        if not candidates:
+            return SyncCommitResult(
+                mode="clean",
+                committed=False,
+                staged_files=[],
+                message="no allowlisted changes to commit",
+            )
+
+        if not apply:
+            return SyncCommitResult(
+                mode="dry-run",
+                committed=False,
+                staged_files=candidates,
+                message="dry run: pass --commit to stage allowlisted files and commit locally",
+            )
+
+        existing = [rel for rel in candidates if (store.home / Path(rel)).exists()]
+        deleted = [rel for rel in candidates if not (store.home / Path(rel)).exists()]
+
+        # Explicitly stage only allowlisted paths; never run git add -A.
+        if existing:
+            add_proc = _run_git(store.home, ["add", "--", *existing])
+            if add_proc.returncode != 0:
+                raise StoreError(f"git add failed: {add_proc.stderr.strip()}")
+        if deleted:
+            rm_proc = _run_git(store.home, ["rm", "--cached", "--ignore-unmatch", "--", *deleted])
+            if rm_proc.returncode != 0:
+                raise StoreError(f"git rm failed: {rm_proc.stderr.strip()}")
+
+        diff_check = _run_git(store.home, ["diff", "--cached", "--quiet"])
+        if diff_check.returncode == 0:
+            return SyncCommitResult(
+                mode="clean",
+                committed=False,
+                staged_files=[],
+                message="nothing staged to commit",
+            )
+
+        commit_proc = _run_git(
+            store.home,
+            ["commit", "--no-verify", "--only", "-m", message, "--", *candidates],
+        )
+        if commit_proc.returncode != 0:
+            detail = commit_proc.stderr.strip() or commit_proc.stdout.strip()
+            raise StoreError(f"git commit failed: {detail}")
+
+        rev = _run_git(store.home, ["rev-parse", "--short", "HEAD"])
+        commit_hash = rev.stdout.strip() if rev.returncode == 0 else None
+        store._audit(
+            "sync_commit",
+            None,
+            {"files": len(candidates), "commit": commit_hash or ""},
+        )
         return SyncCommitResult(
-            mode="dry-run",
-            committed=False,
+            mode="committed",
+            committed=True,
+            commit_hash=commit_hash,
             staged_files=candidates,
-            message="dry run: pass --commit to stage allowlisted files and commit locally",
+            message="committed locally; run 'git push' manually when ready",
         )
-
-    existing = [rel for rel in candidates if (store.home / Path(rel)).exists()]
-    deleted = [rel for rel in candidates if not (store.home / Path(rel)).exists()]
-
-    # Explicitly stage only allowlisted paths; never run git add -A.
-    if existing:
-        add_proc = _run_git(store.home, ["add", "--", *existing])
-        if add_proc.returncode != 0:
-            raise StoreError(f"git add failed: {add_proc.stderr.strip()}")
-    if deleted:
-        rm_proc = _run_git(store.home, ["rm", "--cached", "--ignore-unmatch", "--", *deleted])
-        if rm_proc.returncode != 0:
-            raise StoreError(f"git rm failed: {rm_proc.stderr.strip()}")
-
-    diff_check = _run_git(store.home, ["diff", "--cached", "--quiet"])
-    if diff_check.returncode == 0:
-        return SyncCommitResult(
-            mode="clean",
-            committed=False,
-            staged_files=[],
-            message="nothing staged to commit",
-        )
-
-    commit_proc = _run_git(store.home, ["commit", "-m", message])
-    if commit_proc.returncode != 0:
-        detail = commit_proc.stderr.strip() or commit_proc.stdout.strip()
-        raise StoreError(f"git commit failed: {detail}")
-
-    rev = _run_git(store.home, ["rev-parse", "--short", "HEAD"])
-    commit_hash = rev.stdout.strip() if rev.returncode == 0 else None
-    store._audit(
-        "sync_commit",
-        None,
-        {"files": len(candidates), "commit": commit_hash or ""},
-    )
-    return SyncCommitResult(
-        mode="committed",
-        committed=True,
-        commit_hash=commit_hash,
-        staged_files=candidates,
-        message="committed locally; run 'git push' manually when ready",
-    )

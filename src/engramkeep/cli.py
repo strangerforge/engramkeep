@@ -544,7 +544,12 @@ def _cmd_crypto(args: argparse.Namespace, *, operation: str) -> int:
         resolve_passphrase(prompt=True, confirm=(operation == "encrypt")) if args.apply else ""
     )
     result = (
-        encrypt_store(home, passphrase, apply=args.apply)
+        encrypt_store(
+            home,
+            passphrase,
+            apply=args.apply,
+            keep_plaintext_backup=bool(getattr(args, "keep_plaintext_backup", False)),
+        )
         if operation == "encrypt"
         else decrypt_store(home, passphrase, apply=args.apply)
     )
@@ -1046,7 +1051,12 @@ def build_parser() -> argparse.ArgumentParser:
         "encrypt",
         help="encrypt store cards & fixes at rest (requires engramkeep[crypto]; dry run default)",
     )
-    enc.add_argument("--apply", action="store_true", help="encrypt files with backup")
+    enc.add_argument("--apply", action="store_true", help="encrypt files in place")
+    enc.add_argument(
+        "--keep-plaintext-backup",
+        action="store_true",
+        help="retain the pre-encryption plaintext backup directory after verification",
+    )
     _add_local_arg(enc)
     enc.add_argument("--json", action="store_true", help="print JSON")
     enc.set_defaults(handler=_cmd_encrypt)

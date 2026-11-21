@@ -147,7 +147,20 @@ def _derive_key(
     return derived
 
 
-def encrypt_text(plaintext: str, passphrase: str) -> str:
+def _build_aad(
+    *,
+    context: str | None = None,
+    n: int = _SCRYPT_N,
+    r: int = _SCRYPT_R,
+    p: int = _SCRYPT_P,
+) -> bytes:
+    """Build AEAD associated data; legacy envelopes without context use static ``_AAD``."""
+    if not context:
+        return _AAD
+    return f"{ENVELOPE_FORMAT}|{context}|scrypt:{n}:{r}:{p}".encode()
+
+
+def encrypt_text(plaintext: str, passphrase: str, *, context: str | None = None) -> str:
     """Encrypt UTF-8 text into a self-describing AEAD envelope."""
     if not passphrase:
         raise CryptoError("passphrase must not be empty")
@@ -155,8 +168,9 @@ def encrypt_text(plaintext: str, passphrase: str) -> str:
     salt = secrets.token_bytes(_SALT_BYTES)
     nonce = secrets.token_bytes(_NONCE_BYTES)
     key = _derive_key(passphrase, salt)
-    ciphertext: bytes = aesgcm_cls(key).encrypt(nonce, plaintext.encode("utf-8"), _AAD)
-    envelope = {
+    aad = _build_aad(context=context, n=_SCRYPT_N, r=_SCRYPT_R, p=_SCRYPT_P)
+    ciphertext: bytes = aesgcm_cls(key).encrypt(nonce, plaintext.encode("utf-8"), aad)
+    envelope: dict[str, object] = {
         "format": ENVELOPE_FORMAT,
         "kdf": "scrypt",
         "kdf_params": {"n": _SCRYPT_N, "r": _SCRYPT_R, "p": _SCRYPT_P},
@@ -164,10 +178,17 @@ def encrypt_text(plaintext: str, passphrase: str) -> str:
         "nonce": base64.b64encode(nonce).decode("ascii"),
         "ciphertext": base64.b64encode(ciphertext).decode("ascii"),
     }
+    if context:
+        envelope["aad_context"] = context
     return f"{ENVELOPE_HEADER}\n{json.dumps(envelope, indent=2, sort_keys=True)}\n"
 
 
-def decrypt_text(envelope_text: str, passphrase: str) -> str:
+def decrypt_text(
+    envelope_text: str,
+    passphrase: str,
+    *,
+    expected_context: str | None = None,
+) -> str:
     """Decrypt an Engramkeep AEAD envelope back into UTF-8 plaintext."""
     if not is_encrypted_text(envelope_text):
         raise CryptoError("input is not an Engramkeep encrypted envelope")
@@ -181,6 +202,11 @@ def decrypt_text(envelope_text: str, passphrase: str) -> str:
         if envelope.get("kdf", "scrypt") != "scrypt":
             raise CryptoError(f"unsupported KDF: {envelope.get('kdf')!r}")
         kdf_n, kdf_r, kdf_p = _validate_kdf_params(envelope.get("kdf_params"))
+        raw_ctx = envelope.get("aad_context")
+        if raw_ctx is not None and not isinstance(raw_ctx, str):
+            raise CryptoError("invalid aad_context in encryption envelope")
+        if expected_context is not None and raw_ctx is not None and raw_ctx != expected_context:
+            raise CryptoError("decryption failed: ciphertext context mismatch (possible file swap)")
         salt = base64.b64decode(str(envelope["salt"]), validate=True)
         nonce = base64.b64decode(str(envelope["nonce"]), validate=True)
         ciphertext = base64.b64decode(str(envelope["ciphertext"]), validate=True)
@@ -190,8 +216,9 @@ def decrypt_text(envelope_text: str, passphrase: str) -> str:
         raise CryptoError(f"corrupted encryption envelope: {exc}") from exc
 
     key = _derive_key(passphrase, salt, n=kdf_n, r=kdf_r, p=kdf_p)
+    aad = _build_aad(context=raw_ctx, n=kdf_n, r=kdf_r, p=kdf_p)
     try:
-        plaintext: bytes = aesgcm_cls(key).decrypt(nonce, ciphertext, _AAD)
+        plaintext: bytes = aesgcm_cls(key).decrypt(nonce, ciphertext, aad)
     except Exception as exc:
         raise CryptoError("decryption failed: invalid passphrase or tampered data") from exc
     return plaintext.decode("utf-8")
@@ -231,6 +258,7 @@ def _transform_store(
     *,
     operation: str,
     apply: bool = False,
+    keep_plaintext_backup: bool = False,
 ) -> CryptoStoreResult:
     resolved = Path(home).expanduser().resolve()
     meta_path = resolved / "meta.json"
@@ -266,19 +294,32 @@ def _transform_store(
                 if already:
                     skipped.append(rel)
                     continue
-                atomic_write_text(path, encrypt_text(text, passphrase), private_parent=True)
+                encrypted = encrypt_text(text, passphrase, context=rel)
+                if decrypt_text(encrypted, passphrase, expected_context=rel) != text:
+                    raise CryptoError(f"round-trip verification failed for {rel}")
+                atomic_write_text(path, encrypted, private_parent=True)
                 processed.append(rel)
             else:
                 if not already:
                     skipped.append(rel)
                     continue
-                atomic_write_text(path, decrypt_text(text, passphrase), private_parent=True)
+                atomic_write_text(
+                    path,
+                    decrypt_text(text, passphrase, expected_context=rel),
+                    private_parent=True,
+                )
                 processed.append(rel)
 
         meta = json.loads(meta_path.read_text(encoding="utf-8"))
         if isinstance(meta, dict):
             meta["encrypted"] = operation == "encrypt"
             atomic_write_text(meta_path, json.dumps(meta, indent=2) + "\n", private_parent=True)
+
+        # Do not leave unencrypted plaintext copies behind after verified encryption
+        # unless the caller explicitly opts in with keep_plaintext_backup=True.
+        if operation == "encrypt" and backup_dir is not None and not keep_plaintext_backup:
+            shutil.rmtree(backup_dir)
+            backup_dir = None
 
         return CryptoStoreResult(
             mode="applied",
@@ -294,9 +335,16 @@ def encrypt_store(
     passphrase: str,
     *,
     apply: bool = False,
+    keep_plaintext_backup: bool = False,
 ) -> CryptoStoreResult:
     """Encrypt project cards and troubleshooting registry in ``home`` (dry-run default)."""
-    return _transform_store(home, passphrase, operation="encrypt", apply=apply)
+    return _transform_store(
+        home,
+        passphrase,
+        operation="encrypt",
+        apply=apply,
+        keep_plaintext_backup=keep_plaintext_backup,
+    )
 
 
 def decrypt_store(

@@ -1077,7 +1077,7 @@ def test_crypto_kdf_params_compat_bounds_and_cli_scope_notice(
     assert "remain plaintext" in dry_out
 
     monkeypatch.setenv(ENV_PASSPHRASE, "store-pass")
-    assert main(["--home", str(store.home), "encrypt", "--apply"]) == 0
+    assert main(["--home", str(store.home), "encrypt", "--apply", "--keep-plaintext-backup"]) == 0
     apply_out = capsys.readouterr().out
     assert "remain plaintext" in apply_out
     assert "Prune the unencrypted backup directory" in apply_out

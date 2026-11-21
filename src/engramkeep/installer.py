@@ -504,7 +504,9 @@ def _resolve_mcp_command(
 ) -> tuple[str, list[str]]:
     """Prefer global ``engramkeep`` on PATH; avoid writing an ephemeral ``.venv`` bare name."""
     extra = ["--allow-write"] if allow_write else []
-    if mcp_command and mcp_command.strip():
+    if mcp_command is not None and mcp_command.strip():
+        if any(ord(ch) < 32 or ch == "\x7f" for ch in mcp_command):
+            raise InstallerError("mcp_command must not contain control characters or newlines")
         return mcp_command.strip(), ["mcp", *extra]
     found = shutil.which("engramkeep")
     if found and not _is_inside_venv(found):
@@ -532,8 +534,9 @@ def _mcp_payload(
 
 
 def _toml_quote(value: str) -> str:
-    escaped = value.replace("\\", "\\\\").replace('"', '\\"')
-    return f'"{escaped}"'
+    if any(ord(ch) < 32 or ch == "\x7f" for ch in value):
+        raise InstallerError("TOML string value must not contain control characters or newlines")
+    return json.dumps(value, ensure_ascii=False)
 
 
 def _codex_toml_block(*, allow_write: bool = False, mcp_command: str | None = None) -> str:
@@ -866,11 +869,86 @@ def install_agents(
     return InstallResult(mode=mode, operations=session.operations, backup_dir=backup_dir)
 
 
+def _documented_target_suffixes(plan: AgentPlan) -> tuple[tuple[str, ...], ...]:
+    """Return every documented relative path suffix for ``plan``."""
+    raw_targets = (
+        plan.global_target,
+        plan.project_target,
+        plan.mcp_global,
+        plan.mcp_project,
+        plan.skill_global,
+        plan.skill_project,
+    )
+    suffixes: list[tuple[str, ...]] = []
+    for raw in raw_targets:
+        if not raw:
+            continue
+        rel = raw[2:] if raw.startswith("~/") else raw
+        parts = tuple(part.lower() for part in Path(rel).parts if part and part != ".")
+        if parts and parts not in suffixes:
+            suffixes.append(parts)
+    return tuple(suffixes)
+
+
+def _validate_restore_target(
+    agent_name: str,
+    target_raw: str,
+    *,
+    allowed_roots: tuple[Path, ...] | None = None,
+) -> Path:
+    """Validate a manifest restore target against known agent targets and symlinks."""
+    plan = AGENT_PLANS.get(agent_name.strip().lower())
+    if plan is None:
+        raise InstallerError(
+            f"refusing to restore manifest entry for unknown agent: {agent_name!r}"
+        )
+    if not target_raw.strip() or any(ord(ch) < 32 or ch == "\x7f" for ch in target_raw):
+        raise InstallerError("refusing invalid restore target path")
+    target_path = Path(target_raw)
+    if not target_path.is_absolute() or ".." in target_path.parts:
+        raise InstallerError(f"refusing unsafe restore target path: {target_raw!r}")
+
+    # Check every ancestor and the leaf for symlinks or Windows junctions.
+    current = Path(target_path.anchor)
+    for part in target_path.parts[1:]:
+        current = current / part
+        if is_link_or_junction(current):
+            raise InstallerError(f"refusing to restore through a symlink: {current}")
+    _ensure_not_symlink(target_path)
+
+    target_parts = tuple(part.lower() for part in target_path.parts)
+    suffixes = _documented_target_suffixes(plan)
+    if not any(
+        len(target_parts) >= len(suffix) and target_parts[-len(suffix) :] == suffix
+        for suffix in suffixes
+    ):
+        raise InstallerError(
+            f"refusing to restore non-agent target path for {plan.name}: {target_raw!r}"
+        )
+
+    if allowed_roots is not None:
+        resolved_target = target_path.resolve()
+        in_allowed = False
+        for root in allowed_roots:
+            try:
+                resolved_target.relative_to(root.expanduser().resolve())
+                in_allowed = True
+                break
+            except ValueError:
+                continue
+        if not in_allowed:
+            raise InstallerError(
+                f"refusing to restore target outside allowed roots: {target_raw!r}"
+            )
+    return target_path
+
+
 def restore_installer_backup(
     backup_root: Path,
     run_id: str,
     *,
     dry_run: bool = True,
+    allowed_roots: tuple[Path, ...] | None = None,
 ) -> InstallResult:
     """Restore files from a recorded installer backup run (dry-run by default)."""
     if not run_id or not run_id.strip():
@@ -899,8 +977,11 @@ def restore_installer_backup(
         backup_file = safe_join(run_dir, *Path(backup_rel).parts)
         if not backup_file.is_file() or is_link_or_junction(backup_file):
             raise InstallerError(f"backup file missing in manifest: {backup_rel}")
-        target_path = Path(target_raw)
-        _ensure_not_symlink(target_path)
+        target_path = _validate_restore_target(
+            agent_name,
+            target_raw,
+            allowed_roots=allowed_roots,
+        )
         if dry_run:
             operations.append(
                 Operation(
