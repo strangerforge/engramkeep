@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.2] - 2026-11-21
+
+### Security
+
+- **Hardened allowlist Git sync (`sync.py`):**
+  - Held `store._write_lock()` across `sync_commit()` to prevent TOCTOU races,
+    disabled Git hooks and fsmonitor (`-c core.hooksPath=`,
+    `-c core.fsmonitor=false`), rejected pre-staged non-allowlisted files in the
+    Git index, and committed with `--no-verify --only -- <allowlisted_paths>`.
+- **Strengthened `redact.json` ReDoS guardrails (`redact.py`):**
+  - Replaced the single regex check in `compile_custom_rule()` with a
+    group-depth parser that rejects bounded nested quantifiers (`{m,n}`),
+    alternation (`|`) inside quantified groups, nested group repetitions, and
+    backreferences (`\1`..`\9`, `(?P=...)`).
+- **Validated installer backup restore targets (`installer.py`):**
+  - `restore_installer_backup()` now verifies that every `manifest.json` target
+    belongs to a known `AGENT_PLANS` agent and documented relative path suffix,
+    rejects control characters and relative/traversal paths, and checks every
+    ancestor directory for symlinks/junctions.
+- **Hardened optional encryption at rest (`crypto.py`, `cli.py`):**
+  - `encrypt_store()` now performs a round-trip decryption check and
+    automatically removes the temporary plaintext backup directory upon
+    verification unless `--keep-plaintext-backup` is explicitly passed.
+  - Bound relative file path (`aad_context`) and Scrypt `kdf_params` into
+    AES-GCM AAD to prevent cross-file ciphertext swapping while preserving
+    backwards compatibility with legacy v1 envelopes.
+- **Prevented TOML newline/control-char injection (`installer.py`):**
+  - `_toml_quote()` and `_resolve_mcp_command()` now reject control characters
+    and newlines before writing Codex `config.toml`.
+
 ## [1.2.1] - 2026-11-20
 
 ### Added
