@@ -45,14 +45,15 @@ def test_redact_text_handles_json_unclosed_quotes_and_extra_tokens() -> None:
     unclosed = 'password="unclosed_secret_123'
     assert "unclosed_secret_123" not in redact_text(unclosed)
 
+    aws_dummy = "ASIA" + "IOSFODNN7EXAMPLE"
     extra = (
-        "ASIAIOSFODNN7EXAMPLE "
+        f"{aws_dummy} "
         "whsec_1234567890abcdef1234 "
         "xapp-1-A12345-67890-abcdef "
         "Authorization: ApiKey topsecretapikey99"
     )
     redacted_extra = redact_text(extra)
-    assert "ASIAIOSFODNN7EXAMPLE" not in redacted_extra
+    assert aws_dummy not in redacted_extra
     assert "whsec_1234567890abcdef1234" not in redacted_extra
     assert "xapp-1-A12345-67890-abcdef" not in redacted_extra
     assert "topsecretapikey99" not in redacted_extra
