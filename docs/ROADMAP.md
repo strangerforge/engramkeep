@@ -54,12 +54,24 @@ This roadmap tracks Engramkeep's release milestones and security gates.
   - Release `SHA256SUMS.txt` checksums and SLSA build provenance attestation (`actions/attest-build-provenance`).
   - CLI exit codes reference (`docs/EXIT_CODES.md`) and bilingual README EN/TR sync.
 
-## 1.2.1 - Maintenance, Security Parity, and Bilingual Docs (current)
+## 1.2.1 - Maintenance, Security Parity, and Bilingual Docs (released)
 
 - [x] Updated `SECURITY.md` supported versions (`1.2.x`), cleaned `docs/GOOD_FIRST_ISSUES.md`, and enforced `CHANGELOG.md` + `SECURITY.md` version parity in `scripts/check_repo_hygiene.py`.
 - [x] Added Turkish translations for short docs (`docs/COMPATIBILITY.tr.md`, `docs/PRIVACY.tr.md`).
 - [x] Stored Scrypt `kdf_params` in encrypted envelopes with bounded validation and backwards-compatible decryption, and clarified partial encryption + plaintext backup boundaries in CLI and docs.
 - [x] Enforced non-negative `--limit` validation for `search` and `fixes`, expanded the no-match benchmark control (`3/4`), added no-trailing-newline installer coverage, sped up dashboard test teardown, and added Python 3.14 support.
+
+## 1.2.2 - Audit Hardening (released)
+
+- [x] Remediated F-01 through F-05 security audit findings across `sync.py`, `redact.py`, `installer.py`, and `crypto.py` (hook-disabled Git sync, ReDoS guard, restore target containment, per-file AEAD context AAD, and automatic plaintext crypto backup pruning with `--keep-plaintext-backup`).
+
+## 1.2.3 - Crash/DoS Guards, Encrypted Store Lock, and Data-Safety Hardening (current)
+
+- [x] Locked encrypted stores against accidental read/write corruption (`Store.is_encrypted()` / `require_unencrypted()`, `doctor` error reporting, non-interactive `isatty()` check, staged all-or-nothing crypto transforms, and 256 MiB Scrypt `n*r` memory cap).
+- [x] Fixed `sync.py` `lstrip("./")` allowlist bypass / `.gitignore` handling and added `core.quotepath=false`.
+- [x] Fixed `_EMAIL` $O(n^2)$ ReDoS, `{,n}` ReDoS guard bypass, literal custom replacement safety, chunked >256 KiB custom redaction, pre-redaction importer line cap, and spaced Windows username masking.
+- [x] Guarded MCP stdio and dashboard JSON decoders against `RecursionError`, `ValueError`, and lone-surrogate `UnicodeEncodeError`.
+- [x] Hardened data-safety paths: `migrate --rollback` moves stray cards to `trash/`, `restore --force` archives overwritten cards to `trash/`, `restore --file` verifies project ownership, `installer` records & verifies content `backup_sha256` with line-anchored marker validation, `recent --since` validates real calendar dates, `normalize_tag` transliterates Turkish characters, `store.py` uses `is_link_or_junction()` everywhere, `audit.py` refuses corrupted chain tails, and CI runs real `cryptography` tests on Python 3.12.
 
 ## Future considerations
 

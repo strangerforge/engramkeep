@@ -2,7 +2,7 @@
 
 > [English](COMPATIBILITY.md) | **Türkçe**
 
-Engramkeep 1.2.1 dosya biçimi düzeyinde taşınabilirdir. Kurucu (`install`),
+Engramkeep 1.2.3 dosya biçimi düzeyinde taşınabilirdir. Kurucu (`install`),
 desteklenen ajan yapılandırmalarına yönetilen bloklar, MCP kayıtları ve
 beceri (`SKILL.md`) dosyaları yazar; dokunduğu her dosyayı zaman damgalı
 bir bildirim (`manifest.json`) ile yedekler. Şablonların elle kopyalanması

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import unicodedata
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -31,10 +32,15 @@ def sanitize_title(title: str) -> str:
 
 
 def normalize_tag(tag: str) -> str:
-    """Normalize one tag to lowercase ASCII slug form."""
-    value = str(tag).strip().lower()
-    if not value:
+    """Normalize one tag to lowercase ASCII slug form (with Turkish transliteration)."""
+    raw = str(tag).strip()
+    if not raw:
         raise ValidationError("tag must not be empty")
+    transliterated = raw.translate(str.maketrans("ıİ", "iI"))
+    ascii_text = (
+        unicodedata.normalize("NFKD", transliterated).encode("ascii", "ignore").decode("ascii")
+    )
+    value = ascii_text.lower()
     value = re.sub(r"\s+", "-", value)
     value = re.sub(r"[^a-z0-9._-]", "-", value)
     value = re.sub(r"-{2,}", "-", value).strip("-._")

@@ -7,6 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.3] - 2026-11-23
+
+### Fixed
+
+- **Encrypted store read/write protection (`store.py`, `crypto.py`):**
+  - Added `Store.is_encrypted()` and `Store.require_unencrypted()` so normal read/write operations (`get_card`, `scan_cards`, `remember`, `fix`, `supersede`, `untag`, `merge`, `forget`, `restore`, `reindex`) refuse to corrupt an encrypted store and direct the user to run `engramkeep decrypt --apply` first.
+  - `engramkeep doctor` now detects and reports encrypted stores instead of reporting `OK`.
+  - `resolve_passphrase()` now checks `sys.stdin.isatty()` and fails fast in non-interactive environments instead of hanging on `getpass`.
+  - `_transform_store()` stages and verifies all encrypt/decrypt transformations before writing to disk (rolling back cleanly on I/O failure) and enforces a 256 MiB Scrypt `128 * n * r` memory cap against pre-auth DoS.
+- **Sync allowlist bypass & `.gitignore` handling (`sync.py`):**
+  - Replaced `.lstrip("./")` (which stripped character sets, allowing `.projects/evil.md` and breaking `.gitignore`) with exact `"./"` prefix stripping, and added `-c core.quotepath=false` for non-ASCII paths.
+- **Redaction ReDoS, `{,n}` guard, spaced Windows paths, and fail-closed scanning (`redact.py`, `adapters/base.py`):**
+  - Eliminated O(n^2) backtracking in `_EMAIL` by guarding on `"@"` and bounding local-part/domain lengths; bounded pathological multi-megabyte lines in `clean_candidate()` before redaction.
+  - Extended `_has_redos_risk()` to catch Python >=3.11 `{,n}` quantifiers and switched custom rule replacements to literal substitution (preventing `re.error` crashes on `\1`).
+  - Replaced silent skip on `>256 KiB` custom rule scans with overlapping chunked scanning, and extended Windows user-path redaction to mask profile names containing spaces (e.g. `C:\Users\<username> ...`).
+- **MCP & dashboard crash guards (`mcp_server.py`, `dashboard.py`):**
+  - Caught `RecursionError` (deeply nested JSON) and `ValueError` (>4300-digit integers) in JSON request decoding, and used `errors="replace"` on UTF-8 serialization in `McpServer._send()` so lone surrogates cannot crash the stdio server.
+- **Data-safety & integrity paths (`migrations.py`, `store.py`, `installer.py`, `audit.py`, `models.py`):**
+  - `migrate --rollback` now moves post-snapshot stray cards into `trash/` instead of permanently unlinking them.
+  - `restore --force` archives the overwritten active card to `trash/` before replacing it, and `restore --file` verifies the file belongs to the target project id.
+  - `installer.py` anchors managed-block markers to full lines, rejects orphan/duplicate markers, records and verifies real content `backup_sha256` in `manifest.json`, writes `manifest.json` immediately on backup, and creates a pre-restore backup before overwriting existing targets.
+  - `recent --since` now validates real calendar dates with `date.fromisoformat()` (rejecting e.g. `2026-13-99`).
+  - `normalize_tag()` now applies Turkish-safe transliteration (`güvenlik` -> `guvenlik`).
+  - Replaced remaining `is_symlink()` calls in `store.py` with `is_link_or_junction()`.
+  - `audit.last_audit_hash()` now refuses to silently fork a new chain when the last line of `audit.log` is corrupted JSON.
+
+### Changed
+
+- **CI real crypto coverage & doc sync (`.github/workflows/ci.yml`, `README.md`, `README.tr.md`, `docs/*`):**
+  - Installed `.[dev,crypto]` on Python 3.12 CI runners so real AES-256-GCM + Scrypt + AAD tests execute on every push and PR.
+  - Synchronized `EXIT_CODES.md`, `README.md`, `README.tr.md`, `COMPATIBILITY*.md`, `PRIVACY*.md`, `THREAT_MODEL.md`, and `ROADMAP.md` with `1.2.3`.
+
 ## [1.2.2] - 2026-11-21
 
 ### Security

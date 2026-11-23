@@ -92,12 +92,19 @@ def last_audit_hash(path: Path) -> str:
         return GENESIS_HASH
     try:
         last = json.loads(lines[-1])
-    except json.JSONDecodeError:
-        return GENESIS_HASH
-    if isinstance(last, dict):
-        digest = last.get("hash")
-        if isinstance(digest, str) and len(digest) == 64:
-            return digest
+    except json.JSONDecodeError as exc:
+        raise StoreError(
+            f"{path.name} is corrupted (invalid JSON on last line); run 'engramkeep doctor'"
+        ) from exc
+    if not isinstance(last, dict):
+        raise StoreError(
+            f"{path.name} is corrupted (last entry is not a JSON object); run 'engramkeep doctor'"
+        )
+    digest = last.get("hash")
+    if isinstance(digest, str) and len(digest) == 64:
+        return digest
+    if "hash" in last or "prev_hash" in last:
+        raise StoreError(f"{path.name} has a corrupted hash chain entry; run 'engramkeep doctor'")
     return GENESIS_HASH
 
 

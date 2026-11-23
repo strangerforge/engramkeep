@@ -26,7 +26,7 @@ Windsurf, Gemini CLI, Antigravity, or anything that can read `AGENTS.md` — the
 same persistent, human-readable project memory. It runs on the Python standard
 library alone.
 
-> **Status: 1.2.2 stable.** Local-first Markdown store, budget-bounded
+> **Status: 1.2.3 stable.** Local-first Markdown store, budget-bounded
 > `context` packer (`engramkeep context` & MCP `engramkeep_context`), layered
 > project (`.engramkeep/`) + global memory across CLI/MCP/dashboard, ADR
 > decision lifecycle (`supersede`, `untag`, `merge`, `trash`/`restore`),
@@ -64,7 +64,7 @@ own.
 
 ---
 
-## What works in 1.2.1
+## What works in 1.2.3
 
 | Area | Status |
 | --- | --- |
@@ -288,11 +288,11 @@ error/fix pairs and 45 independently written queries (English and Turkish):
 | Top-3 recall | 45/45 (100%) |
 | Turkish query → English entry, top-1 | 15/15 (100%) |
 | Mean reciprocal rank | 0.978 |
-| Query latency p50 / p95 | ~4 ms / ~9 ms |
+| Query latency p50 / p95 | ~6 ms / ~11 ms |
 
 Scoring is lexical with a small bilingual concept bonus: no embeddings, no
-network calls, nothing to download. Two of the three no-match controls return
-nothing; the third is reported honestly in [docs/BENCHMARK.md](docs/BENCHMARK.md)
+network calls, nothing to download. Three of the four no-match controls return
+nothing; the fourth is reported honestly in [docs/BENCHMARK.md](docs/BENCHMARK.md)
 rather than hidden.
 
 Reproduce:

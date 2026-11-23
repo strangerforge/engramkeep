@@ -1,7 +1,7 @@
 # Threat model
 
 This document describes the security assumptions and known limitations of
-Engramkeep 1.2.1. It is intentionally conservative.
+Engramkeep 1.2.3. It is intentionally conservative.
 
 ## Assets
 
@@ -30,7 +30,7 @@ Engramkeep 1.2.1. It is intentionally conservative.
 
 ## Threats and mitigations
 
-| Threat | Mitigation in 1.2.1 | Residual risk |
+| Threat | Mitigation in 1.2.3 | Residual risk |
 | --- | --- | --- |
 | Path traversal through a project name, URI, or backup run id | `normalize_project_id()` rejects separators, drive letters, control characters, and traversal; `safe_join()` proves containment across CLI, MCP tools/resources, dashboard, trash/restore, `install --restore`, and `migrate --rollback` (confined strictly to `<home>/backups/migrations/`) | A bug in a future caller could bypass the helper |
 | Symlink / NTFS junction escape | `safe_join()` resolves symlinks; `is_link_or_junction()` checks symlinks and Windows reparse points across store, trash, project discovery, MCP `resources/read`, importer & `--discover`, installer & `--restore`, migrations, crypto, and sync | OS-specific edge cases on exotic filesystems |

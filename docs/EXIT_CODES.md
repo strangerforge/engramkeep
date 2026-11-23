@@ -18,8 +18,8 @@ output.
 | Command | Returns `0` when | Returns `1` when |
 | --- | --- | --- |
 | `engramkeep show <project>` | Card exists and is readable | Card does not exist or project id is invalid |
-| `engramkeep forget <project> --yes` | Card or decision removed (moved to `trash/`) | `--yes` omitted, card missing, or decision not found |
-| `engramkeep trash --purge --yes` | Trash emptied | `--yes` omitted |
+| `engramkeep forget <project> --yes` | Card or decision removed (moved to `trash/`) | Card missing or decision not found (`2` if `--yes` omitted) |
+| `engramkeep trash --purge --yes` | Trash emptied | Operational error (`2` if `--yes` omitted) |
 | `engramkeep restore <project>` | Card restored from `trash/` | Trashed card missing, or active card exists without `--force` |
 | `engramkeep merge <src> <dst>` | Decisions and tags merged into `<dst>` | Source or target missing, or `<src> == <dst>` |
 | `engramkeep search` / `fixes` / `list` / `context` | Query runs cleanly (even with 0 hits) | Invalid argument (e.g., invalid `--since` on `recent`, invalid store path) |

@@ -462,7 +462,7 @@ class McpServer:
             return
         try:
             message = json.loads(text)
-        except json.JSONDecodeError:
+        except (json.JSONDecodeError, ValueError, RecursionError):
             self._send_error(None, -32700, "parse error")
             return
         self._handle_message(message)
@@ -999,7 +999,10 @@ class McpServer:
 
     def _send(self, payload: object) -> None:
         data = (
-            json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8") + b"\n"
+            json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode(
+                "utf-8", errors="replace"
+            )
+            + b"\n"
         )
         try:
             self.stdout.write(data)

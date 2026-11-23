@@ -26,15 +26,20 @@ from .paths import atomic_write_text, ensure_private_dir, is_link_or_junction, s
 
 BEGIN_MARKER = "<!-- engramkeep:begin -->"
 END_MARKER = "<!-- engramkeep:end -->"
+_BEGIN_LINE_RE = re.compile(rf"^[ \t]*{re.escape(BEGIN_MARKER)}[ \t]*$", re.MULTILINE)
+_END_LINE_RE = re.compile(rf"^[ \t]*{re.escape(END_MARKER)}[ \t]*$", re.MULTILINE)
 _BLOCK_RE = re.compile(
-    re.escape(BEGIN_MARKER) + r".*?" + re.escape(END_MARKER),
-    re.DOTALL,
+    rf"^[ \t]*{re.escape(BEGIN_MARKER)}[ \t]*\r?\n.*?^[ \t]*{re.escape(END_MARKER)}[ \t]*$",
+    re.DOTALL | re.MULTILINE,
 )
 TOML_BEGIN_MARKER = "# engramkeep:mcp:begin"
 TOML_END_MARKER = "# engramkeep:mcp:end"
+_TOML_BEGIN_LINE_RE = re.compile(rf"^[ \t]*{re.escape(TOML_BEGIN_MARKER)}[ \t]*$", re.MULTILINE)
+_TOML_END_LINE_RE = re.compile(rf"^[ \t]*{re.escape(TOML_END_MARKER)}[ \t]*$", re.MULTILINE)
 _TOML_BLOCK_RE = re.compile(
-    re.escape(TOML_BEGIN_MARKER) + r".*?" + re.escape(TOML_END_MARKER),
-    re.DOTALL,
+    rf"^[ \t]*{re.escape(TOML_BEGIN_MARKER)}[ \t]*\r?\n"
+    rf".*?^[ \t]*{re.escape(TOML_END_MARKER)}[ \t]*$",
+    re.DOTALL | re.MULTILINE,
 )
 
 Scope = Literal["auto", "global", "project"]
@@ -228,6 +233,7 @@ class Operation:
     target: str
     action: str
     backup: str | None = None
+    backup_sha256: str | None = None
     reason: str = ""
 
     def to_dict(self) -> dict[str, object]:
@@ -239,6 +245,8 @@ class Operation:
         }
         if self.backup:
             payload["backup"] = self.backup
+        if self.backup_sha256:
+            payload["backup_sha256"] = self.backup_sha256
         if self.reason:
             payload["reason"] = self.reason
         return payload
@@ -269,6 +277,7 @@ class _Session:
         self.dry_run = dry_run
         self.run_dir: Path | None = None
         self.operations: list[Operation] = []
+        self.backup_hashes: dict[str, str] = {}
 
     def _ensure_run_dir(self) -> Path:
         if self.run_dir is not None:
@@ -283,7 +292,7 @@ class _Session:
         return self.run_dir
 
     def backup(self, path: Path) -> str | None:
-        """Copy an existing file into the run backup directory."""
+        """Copy an existing file into the run backup directory and record its SHA-256."""
         if self.dry_run or not path.exists():
             return None
         run_dir = self._ensure_run_dir()
@@ -291,11 +300,26 @@ class _Session:
         cleaned = re.sub(r"[^A-Za-z0-9._-]+", "_", path.name)[:60] or "file"
         destination = run_dir / f"{cleaned}-{digest}"
         shutil.copy2(path, destination)
-        return destination.relative_to(run_dir).as_posix()
+        rel = destination.relative_to(run_dir).as_posix()
+        self.backup_hashes[rel] = hashlib.sha256(destination.read_bytes()).hexdigest()
+        return rel
 
     def record(self, operation: Operation) -> None:
         """Record one operation for the manifest and the caller."""
+        if operation.backup and not operation.backup_sha256:
+            sha = self.backup_hashes.get(operation.backup)
+            if sha:
+                operation = Operation(
+                    agent=operation.agent,
+                    target=operation.target,
+                    action=operation.action,
+                    backup=operation.backup,
+                    backup_sha256=sha,
+                    reason=operation.reason,
+                )
         self.operations.append(operation)
+        if not self.dry_run and self.run_dir is not None:
+            self.finish()
 
     def finish(self) -> Path | None:
         """Write the manifest when something was backed up or changed."""
@@ -411,6 +435,25 @@ def _read_text_utf8(path: Path) -> str:
         raise InstallerError(f"refusing to edit unreadable file {path}: {exc}") from exc
 
 
+def _validate_managed_markers(
+    current: str,
+    path: Path,
+    *,
+    begin_re: re.Pattern[str] = _BEGIN_LINE_RE,
+    end_re: re.Pattern[str] = _END_LINE_RE,
+    block_re: re.Pattern[str] = _BLOCK_RE,
+) -> list[re.Match[str]]:
+    """Validate that managed-block markers are balanced and non-duplicated."""
+    begins = list(begin_re.finditer(current))
+    ends = list(end_re.finditer(current))
+    blocks = list(block_re.finditer(current))
+    if len(begins) != len(ends) or len(begins) != len(blocks):
+        raise InstallerError(f"refusing to edit {path}: unbalanced or orphan managed-block markers")
+    if len(blocks) > 1:
+        raise InstallerError(f"refusing to edit {path}: multiple managed blocks found")
+    return blocks
+
+
 def _strip_managed_block(current: str) -> str:
     match = _BLOCK_RE.search(current)
     if not match:
@@ -430,8 +473,9 @@ def _apply_block(path: Path, block: str, *, session: _Session) -> tuple[str, str
     _ensure_not_symlink(path)
     existed = path.exists()
     current = _read_text_utf8(path) if existed else ""
+    blocks = _validate_managed_markers(current, path)
 
-    if _BLOCK_RE.search(current):
+    if blocks:
         updated = _BLOCK_RE.sub(lambda _: block, current, count=1)
     elif current.strip():
         updated = current.rstrip() + "\n\n" + block + "\n"
@@ -455,7 +499,8 @@ def _remove_block(path: Path, *, session: _Session) -> tuple[str, str | None]:
     if not path.exists():
         return "missing", None
     current = _read_text_utf8(path)
-    if not _BLOCK_RE.search(current):
+    blocks = _validate_managed_markers(current, path)
+    if not blocks:
         return "unchanged", None
 
     updated = _strip_managed_block(current)
@@ -977,6 +1022,13 @@ def restore_installer_backup(
         backup_file = safe_join(run_dir, *Path(backup_rel).parts)
         if not backup_file.is_file() or is_link_or_junction(backup_file):
             raise InstallerError(f"backup file missing in manifest: {backup_rel}")
+        expected_sha = item.get("backup_sha256")
+        if isinstance(expected_sha, str) and expected_sha:
+            actual_sha = hashlib.sha256(backup_file.read_bytes()).hexdigest()
+            if actual_sha != expected_sha:
+                raise InstallerError(
+                    f"backup integrity check failed for {backup_rel}: SHA-256 mismatch"
+                )
         target_path = _validate_restore_target(
             agent_name,
             target_raw,
@@ -992,6 +1044,18 @@ def restore_installer_backup(
                 )
             )
             continue
+        if target_path.exists():
+            pre_session = _Session(backup_root, dry_run=False)
+            pre_backup = pre_session.backup(target_path)
+            pre_session.record(
+                Operation(
+                    agent=agent_name,
+                    target=str(target_path),
+                    action="pre-restore-backup",
+                    backup=pre_backup,
+                )
+            )
+            pre_session.finish()
         content = _read_text_utf8(backup_file)
         atomic_write_text(target_path, content, mode=None)
         operations.append(

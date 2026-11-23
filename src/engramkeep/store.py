@@ -9,10 +9,12 @@ import re
 import shutil
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass, field
+from datetime import date
 from pathlib import Path
 
 from .audit import AuditVerification, last_audit_hash, seal_audit_entry, verify_audit_log
 from .config import SCHEMA_VERSION
+from .crypto import is_encrypted_text
 from .errors import CardParseError, PathSafetyError, StoreError, ValidationError
 from .models import (
     Card,
@@ -311,6 +313,41 @@ class Store:
         if not self.is_initialized():
             raise StoreError(f"no Engramkeep store at {self.home}; run 'engramkeep init' first")
 
+    def is_encrypted(self) -> bool:
+        """Return True when ``meta.json`` marks the store encrypted or encrypted files exist."""
+        if not self.is_initialized():
+            return False
+        try:
+            meta = self._read_meta()
+            if meta.get("encrypted") is True:
+                return True
+        except StoreError:
+            pass
+        if self.troubleshooting_path.is_file() and not is_link_or_junction(
+            self.troubleshooting_path
+        ):
+            try:
+                if is_encrypted_text(self.troubleshooting_path.read_text(encoding="utf-8")[:128]):
+                    return True
+            except (OSError, UnicodeDecodeError):
+                pass
+        if self.projects_dir.is_dir() and not is_link_or_junction(self.projects_dir):
+            for path in sorted(self.projects_dir.glob("*.md")):
+                if path.is_file() and not is_link_or_junction(path):
+                    try:
+                        if is_encrypted_text(path.read_text(encoding="utf-8")[:128]):
+                            return True
+                    except (OSError, UnicodeDecodeError):
+                        pass
+        return False
+
+    def require_unencrypted(self) -> None:
+        """Refuse normal read/write operations on an encrypted store to prevent data loss."""
+        if self.is_encrypted():
+            raise StoreError(
+                "store is encrypted; run 'engramkeep decrypt --apply' before reading or writing"
+            )
+
     def init(self) -> InitResult:
         """Create the store layout. Safe to call repeatedly."""
         with self._write_lock():
@@ -361,7 +398,7 @@ class Store:
         )
         for path, content in starter_files:
             if path.exists():
-                if path.is_symlink():
+                if is_link_or_junction(path):
                     raise StoreError(f"refusing to use symlinked store file: {path}")
                 continue
             atomic_write_text(path, content, private_parent=True)
@@ -373,7 +410,7 @@ class Store:
         return InitResult(self.home, created, already_initialized)
 
     def _project_path(self, project: str) -> tuple[Path, str]:
-        if self.projects_dir.is_symlink():
+        if is_link_or_junction(self.projects_dir):
             raise StoreError("refusing to use symlinked projects directory")
         project_id = normalize_project_id(project)
         return safe_join(self.projects_dir, f"{project_id}.md"), project_id
@@ -389,10 +426,11 @@ class Store:
     def get_card(self, project: str) -> Card | None:
         """Load one card, or return None when it does not exist."""
         self.require_initialized()
+        self.require_unencrypted()
         path, project_id = self._project_path(project)
         if not path.exists():
             return None
-        if path.is_symlink() or not path.is_file():
+        if is_link_or_junction(path) or not path.is_file():
             raise StoreError(f"refusing to read non-regular card: {path.name}")
         try:
             text = path.read_text(encoding="utf-8")
@@ -406,13 +444,14 @@ class Store:
     def scan_cards(self) -> ScanResult:
         """Read every regular card and collect per-file errors."""
         self.require_initialized()
+        self.require_unencrypted()
         result = ScanResult()
-        if self.projects_dir.is_symlink() or not self.projects_dir.is_dir():
+        if is_link_or_junction(self.projects_dir) or not self.projects_dir.is_dir():
             result.errors.append("projects directory is missing or invalid")
             return result
 
         for path in sorted(self.projects_dir.glob("*.md")):
-            if path.is_symlink() or not path.is_file():
+            if is_link_or_junction(path) or not path.is_file():
                 result.errors.append(f"{path.name}: not a regular file")
                 continue
             try:
@@ -441,6 +480,7 @@ class Store:
     ) -> RememberResult:
         """Record a durable decision for a project."""
         self.require_initialized()
+        self.require_unencrypted()
         project_id = normalize_project_id(project)
         raw_decision = str(decision)
         if len(raw_decision) > 262_144:
@@ -472,13 +512,14 @@ class Store:
     def forget(self, project: str) -> bool:
         """Move a card to trash. Returns False when it does not exist."""
         self.require_initialized()
+        self.require_unencrypted()
         with self._write_lock():
-            if self.trash_dir.is_symlink():
+            if is_link_or_junction(self.trash_dir):
                 raise StoreError("refusing to use symlinked trash directory")
             path, project_id = self._project_path(project)
             if not path.exists():
                 return False
-            if path.is_symlink() or not path.is_file():
+            if is_link_or_junction(path) or not path.is_file():
                 raise StoreError(f"refusing to forget non-regular card: {path.name}")
 
             stamp = utc_now_iso().replace("-", "").replace(":", "")
@@ -553,6 +594,7 @@ class Store:
     ) -> Card:
         """Restore a trashed card back to ``projects/``."""
         self.require_initialized()
+        self.require_unencrypted()
         project_id = normalize_project_id(project)
         with self._write_lock():
             if is_link_or_junction(self.trash_dir):
@@ -564,6 +606,14 @@ class Store:
                 trash_path = safe_join(self.trash_dir, filename)
                 if not trash_path.exists() or is_link_or_junction(trash_path):
                     raise StoreError(f"trashed file not found: {filename}")
+                if not (
+                    trash_path.name == f"{project_id}.md"
+                    or trash_path.name.startswith(f"{project_id}-")
+                ):
+                    raise StoreError(
+                        f"trashed file {trash_path.name!r} does not belong to "
+                        f"project {project_id!r}"
+                    )
             else:
                 candidates = [item for item in self.list_trash() if item.project_id == project_id]
                 if not candidates:
@@ -580,6 +630,18 @@ class Store:
                 card = parse_card(text, fallback_id=project_id)
             except (OSError, UnicodeDecodeError, CardParseError) as exc:
                 raise StoreError(f"cannot restore {trash_path.name}: {exc}") from exc
+
+            if dest_path.exists() and force:
+                stamp = utc_now_iso().replace("-", "").replace(":", "")
+                backup_name = f"{project_id}-pre-restore-{stamp}.md"
+                backup_path = safe_join(self.trash_dir, backup_name)
+                counter = 1
+                while backup_path.exists():
+                    backup_path = safe_join(
+                        self.trash_dir, f"{project_id}-pre-restore-{stamp}-{counter}.md"
+                    )
+                    counter += 1
+                replace_file(dest_path, backup_path)
 
             try:
                 replace_file(trash_path, dest_path)
@@ -780,6 +842,12 @@ class Store:
             candidate = since.strip()
             if not _ISO_DATE_RE.match(candidate):
                 raise ValidationError(f"invalid --since date {since!r}; expected YYYY-MM-DD")
+            try:
+                date.fromisoformat(candidate)
+            except ValueError as exc:
+                raise ValidationError(
+                    f"invalid --since date {since!r}; expected a valid calendar date YYYY-MM-DD"
+                ) from exc
             since_date = candidate
         if limit <= 0 or not self.recent_path.exists():
             return []
@@ -802,9 +870,10 @@ class Store:
         return list(reversed(bullets[-limit:]))
 
     def _read_troubleshooting(self) -> list[TroubleEntry]:
+        self.require_unencrypted()
         if not self.troubleshooting_path.exists():
             return []
-        if self.troubleshooting_path.is_symlink():
+        if is_link_or_junction(self.troubleshooting_path):
             raise StoreError("refusing to read TROUBLESHOOTING.md through a symlink")
         if not self.troubleshooting_path.is_file():
             raise StoreError("TROUBLESHOOTING.md is not a regular file")
@@ -993,6 +1062,13 @@ class Store:
         except ValidationError as exc:
             report.errors.append(str(exc))
             rules = ()
+
+        if self.is_encrypted():
+            report.errors.append(
+                "store is encrypted; run 'engramkeep decrypt --apply' before normal use"
+            )
+            report.ok = False
+            return report
 
         scan = self.scan_cards()
         report.cards = len(scan.cards)

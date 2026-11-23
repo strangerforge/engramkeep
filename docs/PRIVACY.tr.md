@@ -91,9 +91,11 @@ argümanı olarak alınmaz.
 - `INDEX.md`, `RECENT_ACTIVITY.md`, `audit.log` ve `meta.json` düz metin kalır
   (proje kimlikleri, başlıklar, etiketler ve aktivite zaman damgaları bu
   dosyalarda görünür durumdadır).
-- `engramkeep encrypt --apply`, şifreleme öncesinde `<home>/backups/crypto/`
-  altına düz metin yedek yazar; şifre çözmeyi doğruladıktan sonra eski şifreleme
-  yedeklerini silin.
+- `engramkeep encrypt --apply` yazma öncesinde şifre çözme doğrulaması yapar ve
+  `--keep-plaintext-backup` verilmediği sürece `<home>/backups/crypto/` altındaki
+  geçici düz metin yedeği otomatik siler. Depo şifreliyken normal okuma/yazma
+  komutları veri kaybını önlemek için `engramkeep decrypt --apply` çalıştırılana
+  kadar engellenir.
 - Şeffaf ve tüm dizini kapsayan gizlilik için işletim sisteminin tam disk
   şifrelemesini (BitLocker, FileVault, LUKS) tercih edin.
 

@@ -289,6 +289,8 @@ def _restore_snapshot(home: Path, snapshot: Path) -> list[str]:
                 stray.unlink()
     projects_dir = home / PROJECTS_DIR
     if projects_dir.is_dir() and not is_link_or_junction(projects_dir):
+        trash_dir = home / "trash"
+        stamp = utc_now_iso().replace("-", "").replace(":", "")
         for card_file in sorted(projects_dir.glob("*.md")):
             rel_card = f"{PROJECTS_DIR}/{card_file.name}"
             if (
@@ -296,7 +298,12 @@ def _restore_snapshot(home: Path, snapshot: Path) -> list[str]:
                 and card_file.is_file()
                 and not is_link_or_junction(card_file)
             ):
-                card_file.unlink()
+                if not is_link_or_junction(trash_dir):
+                    ensure_private_dir(trash_dir)
+                    dst = safe_join(trash_dir, f"{card_file.stem}-rollback-{stamp}.md")
+                    shutil.move(str(card_file), str(dst))
+                else:
+                    card_file.unlink()
 
     return restored
 

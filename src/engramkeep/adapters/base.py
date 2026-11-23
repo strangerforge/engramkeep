@@ -118,7 +118,11 @@ class TranscriptAdapter:
 
 def clean_candidate(text: str, *, max_chars: int = 240) -> str:
     """Redact secrets, strip control chars, and normalize whitespace."""
-    cleaned = redact_text(strip_control_chars(text))
+    # Bound pathological multi-megabyte single lines before regex redaction while
+    # preserving plenty of headroom for secret tokens and whitespace collapse.
+    pre_limit = max(max_chars * 16, 4096)
+    bounded = strip_control_chars(text[:pre_limit])
+    cleaned = redact_text(bounded)
     cleaned = " ".join(cleaned.split())
     if len(cleaned) > max_chars:
         cleaned = cleaned[:max_chars].rstrip()

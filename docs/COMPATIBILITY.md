@@ -2,7 +2,7 @@
 
 > **English** | [Türkçe](COMPATIBILITY.tr.md)
 
-Engramkeep 1.2.1 is portable by file format. The installer writes managed blocks,
+Engramkeep 1.2.3 is portable by file format. The installer writes managed blocks,
 MCP registrations, and skills into supported agent configs while backing up every
 touched file with a timestamped manifest; manual template copying also works.
 

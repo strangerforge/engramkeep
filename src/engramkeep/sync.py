@@ -93,7 +93,14 @@ def _git_executable() -> str:
 
 def _run_git(home: Path, args: list[str]) -> subprocess.CompletedProcess[str]:
     git = _git_executable()
-    safe_prefix = ["-c", "core.hooksPath=", "-c", "core.fsmonitor=false"]
+    safe_prefix = [
+        "-c",
+        "core.hooksPath=",
+        "-c",
+        "core.fsmonitor=false",
+        "-c",
+        "core.quotepath=false",
+    ]
     try:
         return subprocess.run(  # noqa: S603 - explicit git binary and static arg list, shell=False
             [git, *safe_prefix, *args],
@@ -109,7 +116,9 @@ def _run_git(home: Path, args: list[str]) -> subprocess.CompletedProcess[str]:
 
 def is_allowlisted_path(rel: str) -> bool:
     """Return True when ``rel`` matches the strict sync allowlist (even if deleted)."""
-    normalized = rel.replace("\\", "/").lstrip("./")
+    normalized = rel.replace("\\", "/")
+    while normalized.startswith("./"):
+        normalized = normalized[2:]
     if normalized in SYNC_ALLOWLIST_FILES or normalized == ".gitignore":
         return True
     prefix = f"{PROJECTS_DIR}/"

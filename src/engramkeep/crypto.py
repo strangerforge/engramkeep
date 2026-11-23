@@ -19,6 +19,7 @@ import json
 import os
 import secrets
 import shutil
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -38,6 +39,7 @@ _MIN_SCRYPT_N = 2**10
 _MAX_SCRYPT_N = 2**20
 _MAX_SCRYPT_R = 32
 _MAX_SCRYPT_P = 16
+_MAX_SCRYPT_MEM_BYTES = 256 * 1024 * 1024  # 256 MiB pre-auth KDF memory cap
 _KEY_BYTES = 32
 _SALT_BYTES = 16
 _NONCE_BYTES = 12
@@ -94,6 +96,8 @@ def resolve_passphrase(
     """Resolve a non-empty passphrase from argument, environment, or interactive prompt."""
     value = passphrase if passphrase is not None else os.environ.get(ENV_PASSPHRASE)
     if (value is None or not value) and prompt:
+        if sys.stdin is None or not sys.stdin.isatty():
+            raise CryptoError(f"passphrase required in non-interactive mode; set {ENV_PASSPHRASE}")
         first = getpass.getpass("Engramkeep passphrase: ")
         if confirm:
             second = getpass.getpass("Confirm passphrase: ")
@@ -130,6 +134,11 @@ def _validate_kdf_params(raw_params: object) -> tuple[int, int, int]:
         raise CryptoError(f"unsupported Scrypt block size r={r}")
     if not (1 <= p <= _MAX_SCRYPT_P):
         raise CryptoError(f"unsupported Scrypt parallelization p={p}")
+    if 128 * n * r > _MAX_SCRYPT_MEM_BYTES:
+        raise CryptoError(
+            f"Scrypt parameters n={n}, r={r} exceed {_MAX_SCRYPT_MEM_BYTES // (1024 * 1024)} MiB "
+            "memory cap"
+        )
     return n, r, p
 
 
@@ -286,7 +295,10 @@ def _transform_store(
 
     _require_crypto()
     with file_lock(resolved / ".engramkeep.lock"):
-        backup_dir = _create_crypto_backup(resolved, targets, operation) if targets else None
+        # Compute and verify all transformations before touching store files so a
+        # mid-way failure (e.g., wrong passphrase on one file) never leaves a
+        # half-encrypted store.
+        staged: list[tuple[str, Path, str]] = []
         for rel, path in targets:
             text = path.read_text(encoding="utf-8")
             already = is_encrypted_text(text)
@@ -297,23 +309,35 @@ def _transform_store(
                 encrypted = encrypt_text(text, passphrase, context=rel)
                 if decrypt_text(encrypted, passphrase, expected_context=rel) != text:
                     raise CryptoError(f"round-trip verification failed for {rel}")
-                atomic_write_text(path, encrypted, private_parent=True)
-                processed.append(rel)
+                staged.append((rel, path, encrypted))
             else:
                 if not already:
                     skipped.append(rel)
                     continue
-                atomic_write_text(
-                    path,
-                    decrypt_text(text, passphrase, expected_context=rel),
-                    private_parent=True,
-                )
+                decrypted = decrypt_text(text, passphrase, expected_context=rel)
+                staged.append((rel, path, decrypted))
+
+        backup_dir = _create_crypto_backup(resolved, targets, operation) if staged else None
+        try:
+            for rel, path, payload in staged:
+                atomic_write_text(path, payload, private_parent=True)
                 processed.append(rel)
 
-        meta = json.loads(meta_path.read_text(encoding="utf-8"))
-        if isinstance(meta, dict):
-            meta["encrypted"] = operation == "encrypt"
-            atomic_write_text(meta_path, json.dumps(meta, indent=2) + "\n", private_parent=True)
+            meta = json.loads(meta_path.read_text(encoding="utf-8"))
+            if isinstance(meta, dict):
+                meta["encrypted"] = operation == "encrypt"
+                atomic_write_text(meta_path, json.dumps(meta, indent=2) + "\n", private_parent=True)
+        except Exception:
+            if backup_dir is not None:
+                for rel, path, _ in staged:
+                    backup_copy = backup_dir / rel
+                    if backup_copy.is_file():
+                        atomic_write_text(
+                            path, backup_copy.read_text(encoding="utf-8"), private_parent=True
+                        )
+                if operation == "encrypt" and not keep_plaintext_backup:
+                    shutil.rmtree(backup_dir, ignore_errors=True)
+            raise
 
         # Do not leave unencrypted plaintext copies behind after verified encryption
         # unless the caller explicitly opts in with keep_plaintext_backup=True.

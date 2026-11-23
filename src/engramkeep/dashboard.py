@@ -628,7 +628,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
     def _decode_json_body(self, data: bytes) -> dict[str, Any] | None:
         try:
             body = json.loads(data.decode("utf-8"))
-        except (UnicodeDecodeError, json.JSONDecodeError):
+        except (UnicodeDecodeError, json.JSONDecodeError, ValueError, RecursionError):
             self._send_json(
                 HTTPStatus.BAD_REQUEST,
                 {"error": "request body must be valid UTF-8 JSON"},

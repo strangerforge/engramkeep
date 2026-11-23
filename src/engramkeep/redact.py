@@ -74,7 +74,7 @@ def _has_redos_risk(pattern_text: str) -> bool:
             continue
         if ch == "{":
             close = pattern_text.find("}", i + 1)
-            if close != -1 and re.fullmatch(r"\d+(?:,\d*)?", pattern_text[i + 1 : close]):
+            if close != -1 and re.fullmatch(r"(?:\d+(?:,\d*)?|,\d+)", pattern_text[i + 1 : close]):
                 if stack:
                     stack[-1][0] = True
                 i = close + 1
@@ -88,7 +88,9 @@ def _has_redos_risk(pattern_text: str) -> bool:
                 group_quantified = True
             elif j < n and pattern_text[j] == "{":
                 close = pattern_text.find("}", j + 1)
-                if close != -1 and re.fullmatch(r"\d+(?:,\d*)?", pattern_text[j + 1 : close]):
+                if close != -1 and re.fullmatch(
+                    r"(?:\d+(?:,\d*)?|,\d+)", pattern_text[j + 1 : close]
+                ):
                     group_quantified = True
             if group_quantified and (has_quant or has_alt):
                 return True
@@ -148,7 +150,9 @@ _QUOTED_ASSIGNMENT = re.compile(
     rf"(?i)\b({_KEY_NAMES})(['\"]?\s*[:=]\s*)(['\"])([^'\"\r\n]{{6,}})\3"
 )
 _ASSIGNMENT = re.compile(rf"(?i)\b({_KEY_NAMES})(['\"]?\s*[:=]\s*['\"]?)([^\s'\";\r\n]{{6,}})")
-_EMAIL = re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b")
+_EMAIL = re.compile(
+    r"(?<![A-Za-z0-9._%+-])[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9.-]{1,253}\.[A-Za-z]{2,}\b"
+)
 
 _SAFE_USERNAMES = {
     "example",
@@ -161,6 +165,10 @@ _SAFE_USERNAMES = {
     "default",
 }
 _USER_PATH_PATTERNS: tuple[re.Pattern[str], ...] = (
+    # Windows profile paths with spaces (e.g. C:\Users\<username> ...)
+    re.compile(
+        r"(?i)(\b[A-Z]:[\\/]+Users[\\/]+)([A-Za-z0-9._-]+(?: [A-Za-z0-9._-]+){1,2})(?=[\\/])"
+    ),
     re.compile(r"(?i)(\b[A-Z]:[\\/]+Users[\\/]+)([A-Za-z0-9._-]+)"),
     re.compile(r"(/Users/)([A-Za-z0-9._-]+)"),
     re.compile(r"(/home/)([A-Za-z0-9._-]+)"),
@@ -260,6 +268,18 @@ def redact_user_paths(text: str) -> str:
     return result
 
 
+def _apply_custom_rules(text: str, rules: tuple[CustomRedactionRule, ...]) -> str:
+    result = text
+    for rule in rules:
+        replacement = rule.replacement
+
+        def _literal_replace(_match: re.Match[str], rep: str = replacement) -> str:
+            return rep
+
+        result = rule.pattern.sub(_literal_replace, result)
+    return result
+
+
 def redact_text(
     text: str,
     *,
@@ -276,23 +296,45 @@ def redact_text(
     )
     for pattern in _TOKEN_PATTERNS:
         result = pattern.sub(REDACTED, result)
-    result = _URL_CREDENTIALS.sub(
-        lambda match: f"{match.group(1)}{REDACTED}{match.group(3)}", result
-    )
+    if "://" in result:
+        result = _URL_CREDENTIALS.sub(
+            lambda match: f"{match.group(1)}{REDACTED}{match.group(3)}", result
+        )
     result = _AUTH_HEADER.sub(lambda match: f"{match.group(1)} {REDACTED}", result)
-    result = _QUOTED_ASSIGNMENT.sub(
-        lambda match: f"{match.group(1)}{match.group(2)}{match.group(3)}{REDACTED}{match.group(3)}",
-        result,
-    )
-    result = _ASSIGNMENT.sub(
-        lambda match: f"{match.group(1)}{match.group(2)}{REDACTED}",
-        result,
-    )
-    result = _EMAIL.sub(REDACTED_EMAIL, result)
+    if ":" in result or "=" in result:
+        result = _QUOTED_ASSIGNMENT.sub(
+            lambda match: (
+                f"{match.group(1)}{match.group(2)}{match.group(3)}{REDACTED}{match.group(3)}"
+            ),
+            result,
+        )
+        result = _ASSIGNMENT.sub(
+            lambda match: f"{match.group(1)}{match.group(2)}{REDACTED}",
+            result,
+        )
+    if "@" in result:
+        result = _EMAIL.sub(REDACTED_EMAIL, result)
     result = redact_user_paths(result)
-    if len(result) <= MAX_CUSTOM_SCAN_CHARS:
-        for rule in extra_rules:
-            result = rule.pattern.sub(rule.replacement, result)
+    rules_tuple = tuple(extra_rules)
+    if rules_tuple:
+        if len(result) <= MAX_CUSTOM_SCAN_CHARS:
+            result = _apply_custom_rules(result, rules_tuple)
+        else:
+            # Fail-closed on large inputs: scan in bounded overlapping chunks so
+            # custom rules are never silently skipped.
+            overlap = min(512, MAX_RULE_PATTERN_CHARS * 2)
+            step = MAX_CUSTOM_SCAN_CHARS - overlap
+            chunks: list[str] = []
+            pos = 0
+            length = len(result)
+            while pos < length:
+                end = min(length, pos + MAX_CUSTOM_SCAN_CHARS)
+                chunk = _apply_custom_rules(result[pos:end], rules_tuple)
+                chunks.append(chunk if pos == 0 else chunk[overlap:])
+                if end >= length:
+                    break
+                pos += step
+            result = "".join(chunks)
     return result
 
 

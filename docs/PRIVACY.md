@@ -86,9 +86,10 @@ shell history and process-list leaks).
 - `INDEX.md`, `RECENT_ACTIVITY.md`, `audit.log`, and `meta.json` remain
   plaintext (project ids, titles, tags, and activity timestamps are still
   visible in those files).
-- `engramkeep encrypt --apply` writes a pre-encryption plaintext backup under
-  `<home>/backups/crypto/`; delete old crypto backups once you verify you can
-  decrypt successfully.
+- `engramkeep encrypt --apply` verifies decryption round-trip before writing and
+  automatically removes the temporary plaintext backup under `<home>/backups/crypto/`
+  unless `--keep-plaintext-backup` is passed. While encrypted, normal read/write
+  commands refuse to run until `engramkeep decrypt --apply` is executed.
 - For transparent, whole-directory confidentiality, prefer OS full-disk
   encryption (BitLocker, FileVault, LUKS).
 
