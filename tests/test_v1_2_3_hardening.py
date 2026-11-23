@@ -188,7 +188,13 @@ def test_mcp_server_survives_deep_json_huge_int_and_lone_surrogate(tmp_path: Pat
     assert server.run(io.BytesIO(deep_json + huge_int + surrogate + valid_ping)) == 0
     lines = [json.loads(line) for line in out.getvalue().decode("utf-8").splitlines()]
     assert len(lines) == 4
-    assert lines[0]["error"]["code"] == -32700
+    # Python <=3.13 hits RecursionError (-32700); Python 3.14 parses iteratively and returns
+    # a batch invalid-request error ([{"error": {"code": -32600}}]). Either way server survives.
+    first = lines[0]
+    if isinstance(first, dict):
+        assert first["error"]["code"] == -32700
+    else:
+        assert isinstance(first, list) and first[0]["error"]["code"] == -32600
     assert lines[1]["error"]["code"] == -32700
     assert lines[3] == {"jsonrpc": "2.0", "id": 42, "result": {}}
 
